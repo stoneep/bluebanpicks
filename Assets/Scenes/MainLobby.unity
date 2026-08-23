@@ -2038,7 +2038,6 @@ GameObject:
   m_Component:
   - component: {fileID: 830950995}
   - component: {fileID: 830950998}
-  - component: {fileID: 830950997}
   - component: {fileID: 830950996}
   m_Layer: 5
   m_Name: Second_Banbar
@@ -2064,7 +2063,7 @@ RectTransform:
   m_AnchorMin: {x: 1, y: 1}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: -270, y: 0}
-  m_SizeDelta: {x: 115, y: 0}
+  m_SizeDelta: {x: 115, y: 1080}
   m_Pivot: {x: 1, y: 1}
 --- !u!114 &830950996
 MonoBehaviour:
@@ -2082,20 +2081,6 @@ MonoBehaviour:
   contentRoot: {fileID: 830950995}
   config:
     slotCount: 5
---- !u!114 &830950997
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 830950994}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_HorizontalFit: 0
-  m_VerticalFit: 2
 --- !u!114 &830950998
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2111,12 +2096,12 @@ MonoBehaviour:
   m_Padding:
     m_Left: 0
     m_Right: 0
-    m_Top: 100
+    m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 0
+  m_ChildAlignment: 4
   m_Spacing: 20
-  m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 1
+  m_ChildForceExpandWidth: 0
+  m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
@@ -3794,7 +3779,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1485380513}
   - component: {fileID: 1485380516}
-  - component: {fileID: 1485380515}
   - component: {fileID: 1485380514}
   m_Layer: 5
   m_Name: Second_Pickbar
@@ -3820,7 +3804,7 @@ RectTransform:
   m_AnchorMin: {x: 1, y: 1}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: -75, y: 0}
-  m_SizeDelta: {x: 115, y: 0}
+  m_SizeDelta: {x: 115, y: 1080}
   m_Pivot: {x: 1, y: 1}
 --- !u!114 &1485380514
 MonoBehaviour:
@@ -3838,20 +3822,6 @@ MonoBehaviour:
   contentRoot: {fileID: 1485380513}
   config:
     slotCount: 5
---- !u!114 &1485380515
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1485380512}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_HorizontalFit: 0
-  m_VerticalFit: 2
 --- !u!114 &1485380516
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3867,12 +3837,12 @@ MonoBehaviour:
   m_Padding:
     m_Left: 0
     m_Right: 0
-    m_Top: 100
+    m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 0
+  m_ChildAlignment: 4
   m_Spacing: 20
-  m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 1
+  m_ChildForceExpandWidth: 0
+  m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
@@ -4847,7 +4817,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1684674529}
   - component: {fileID: 1684674530}
-  - component: {fileID: 1684674531}
   - component: {fileID: 1684674532}
   m_Layer: 5
   m_Name: First_Pickbar
@@ -4873,7 +4842,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 75, y: 0}
-  m_SizeDelta: {x: 115, y: 0}
+  m_SizeDelta: {x: 115, y: 1080}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1684674530
 MonoBehaviour:
@@ -4890,31 +4859,17 @@ MonoBehaviour:
   m_Padding:
     m_Left: 0
     m_Right: 0
-    m_Top: 100
+    m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 0
+  m_ChildAlignment: 4
   m_Spacing: 20
-  m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 1
+  m_ChildForceExpandWidth: 0
+  m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
---- !u!114 &1684674531
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1684674528}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_HorizontalFit: 0
-  m_VerticalFit: 2
 --- !u!114 &1684674532
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4941,7 +4896,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1690041822}
   - component: {fileID: 1690041825}
-  - component: {fileID: 1690041824}
   - component: {fileID: 1690041823}
   m_Layer: 5
   m_Name: First_Banbar
@@ -4967,7 +4921,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 270, y: 0}
-  m_SizeDelta: {x: 115, y: 0}
+  m_SizeDelta: {x: 115, y: 1080}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1690041823
 MonoBehaviour:
@@ -4985,20 +4939,6 @@ MonoBehaviour:
   contentRoot: {fileID: 1690041822}
   config:
     slotCount: 5
---- !u!114 &1690041824
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1690041821}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_HorizontalFit: 0
-  m_VerticalFit: 2
 --- !u!114 &1690041825
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5014,12 +4954,12 @@ MonoBehaviour:
   m_Padding:
     m_Left: 0
     m_Right: 0
-    m_Top: 100
+    m_Top: 0
     m_Bottom: 0
-  m_ChildAlignment: 0
+  m_ChildAlignment: 4
   m_Spacing: 20
-  m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 1
+  m_ChildForceExpandWidth: 0
+  m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 0
   m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
