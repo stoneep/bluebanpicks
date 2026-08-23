@@ -1,0 +1,74 @@
+{
+  "characters": [
+    {
+      "id": "CH0156",
+      "displayName": "Iroha",
+      "Rarity": 3,
+      "TacticalRole":"Special",
+      "Affiliation": "gehenna",
+      "Role": "TacticalSupport",
+      "Position": "Back",
+      "AttackType": "Mystic",
+      "DefenseType": "Heavy",
+      "Preferred": {
+        "Urban": 1,
+        "Field": 3,
+        "Indoor": 5 },
+      "equip": {
+        "weapon": "Hat",
+        "armor": "Badge",
+        "accessory": "Wristwatch",
+        "unique": false },
+      "base": {
+        "hp": 120,
+        "atk": 18,
+        "def": 12,
+        "heal": 0 },
+      "growth": {
+        "hp": 12,
+        "atk": 2,
+        "def": 1,
+        "heal": 0 }
+    },
+    {
+      "id":"CH0063",
+      "displayName":"Hina(Swimsuit)",
+      "Rarity":3,
+      "TacticalRole":"Striker",
+      "Affiliation":"gehenna",
+      "Role":"Dealer",
+      "Position":"Back",
+      "AttackType": "Explosive",
+      "DefenseType": "Heavy",
+      "Preferred": { "Urban":3, "Field":5, "Indoor":1 },
+      "equip": {
+        "weapon": "Hat",
+        "armor": "Hairpin",
+        "accessory": "Necklace",
+        "unique": false
+      },
+      "base": { "hp": 120, "atk": 18, "def": 12, "heal": 0 },
+      "growth": { "hp": 12, "atk": 2, "def": 1, "heal": 0 }
+    },
+    {
+      "id":"CH0070",
+      "displayName":"Seia",
+      "Rarity":3,
+      "TacticalRole":"Striker",
+      "Affiliation":"trinity",
+      "Role":"Support",
+      "Position":"Middle",
+      "AttackType": "Piercing",
+      "DefenseType": "Elastic",
+      "Preferred": { "Urban":3, "Field":1, "Indoor":5 },
+      "equip": {
+        "weapon": "Shoes",
+        "armor": "Hairpin",
+        "accessory": "Necklace",
+        "unique": false
+      },
+      "base": { "hp": 120, "atk": 18, "def": 12, "heal": 0 },
+      "growth": { "hp": 12, "atk": 2, "def": 1, "heal": 0 }
+    }
+  ]
+}
