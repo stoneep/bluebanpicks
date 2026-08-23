@@ -1,5 +1,6 @@
 ﻿// CharacterListPanelController.cs
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -15,7 +16,11 @@ public sealed class CharacterListPanelController : MonoBehaviour
     [Header("Popup")]
     [SerializeField] private FilterPopupController filterPopup;
     [SerializeField] private Button openPopupBtn;
-    
+
+    [Header("Draft")]
+    [Tooltip("할당하면 리스트 클릭이 곧바로 밴/픽 제출로 연결됨. 밴픽 화면이 아니면 비워둘 것.")]
+    [SerializeField] private DraftBoardController draftBoardController;
+
     private FilterEngine<CharacterViewData> engine;
     private readonly CharacterFilterState state = new();
     private readonly CharacterFilterRules rules = new();
@@ -25,6 +30,12 @@ public sealed class CharacterListPanelController : MonoBehaviour
     // ★ 프리로드용
     private readonly AtlasPreloader atlasPreloader = new();
     private CharacterArtProvider preloadArtProvider;
+
+    /// <summary>
+    /// draftBoardController.SubmitCharacter가 실패했을 때(차례가 아님, 이미 밴/픽됨 등)
+    /// 사유를 그대로 전달. 토스트 UI 등에서 구독해서 사용자에게 보여주면 됨.
+    /// </summary>
+    public event Action<string> OnDraftSubmitFailed;
 
     private void Awake()
     {
@@ -51,6 +62,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
         if (affiliationBar) affiliationBar.OnValueChanged += OnQuickAffiliationChanged;
         if (tacticalRoleBar) tacticalRoleBar.OnValueChanged += OnQuickRoleChanged;
         if (searchBar) searchBar.OnValueChanged += OnSearchTextChanged;
+        if (view) view.OnCharacterPicked += HandleCharacterPicked;
         
         RefreshView();
     }
@@ -60,6 +72,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
         if (affiliationBar) affiliationBar.OnValueChanged -= OnQuickAffiliationChanged;
         if (tacticalRoleBar) tacticalRoleBar.OnValueChanged -= OnQuickRoleChanged;
         if (searchBar) searchBar.OnValueChanged -= OnSearchTextChanged;
+        if (view) view.OnCharacterPicked -= HandleCharacterPicked;
     }
     
     private void ApplyContext(CharacterFilterContext context)
@@ -124,6 +137,26 @@ public sealed class CharacterListPanelController : MonoBehaviour
     {
         engine.SetSort(state.GetComparison());
         engine.Rebuild(jumpToTop: true);
+    }
+
+    // ═══════════════════════════════════════
+    //  ★ 밴픽 연결
+    // ═══════════════════════════════════════
+
+    /// <summary>
+    /// 리스트에서 캐릭터를 클릭했을 때. draftBoardController가 할당돼 있으면
+    /// 곧바로 SubmitCharacter로 넘긴다 - "지금 누구 차례인가" 같은 판단은
+    /// 전부 RuleManager 쪽 책임이고 여기서는 결과(성공/실패)만 처리한다.
+    /// </summary>
+    private void HandleCharacterPicked(CharacterViewData data)
+    {
+        if (!draftBoardController) return; // 밴픽 화면이 아니면 무시
+
+        if (!draftBoardController.SubmitCharacter(data.Id, out var error))
+        {
+            Debug.LogWarning($"[{nameof(CharacterListPanelController)}] 밴/픽 실패: {error}");
+            OnDraftSubmitFailed?.Invoke(error);
+        }
     }
 
     // ═══════════════════════════════════════

@@ -25,9 +25,11 @@ public sealed class RuleManager
     public event Action<DraftSide, string, DraftResultType> OnActionSubmitted;
     public event Action OnDraftCompleted;
 
-    private readonly List<IDraftPhase> phases;
+    private readonly DraftFormatSO format;
+    private readonly ITurnOrderRule turnOrder;
     private readonly HashSet<string> usedCharacterIds = new();
 
+    private List<IDraftPhase> phases;
     private int currentPhaseIndex = -1;
 
     public RuleManager(DraftFormatSO format, ITurnOrderRule turnOrder = null)
@@ -35,17 +37,20 @@ public sealed class RuleManager
         if (!format)
             throw new ArgumentNullException(nameof(format));
 
-        turnOrder ??= new AlternatingTurnOrderRule();
-
-        // 선공밴→후공밴→선공픽→후공픽:
-        // Ban 페이즈 하나가 (선공, 후공) 슬롯을 모두 채워야 끝나고,
-        // 그 다음에 Pick 페이즈로 넘어가는 구조이므로 리스트 순서 자체가 매크로 순서를 표현한다.
-        phases = new List<IDraftPhase>
-        {
-            new BanPhase(format.FirstBanSlots, format.SecondBanSlots, turnOrder),
-            new PickPhase(format.FirstPickSlots, format.SecondPickSlots, turnOrder)
-        };
+        this.format = format;
+        this.turnOrder = turnOrder ?? new AlternatingTurnOrderRule();
     }
+
+    /// <summary>
+    /// 선공밴→후공밴→선공픽→후공픽 순서로 진행할 페이즈들을 새로 만든다.
+    /// StartDraft()마다 새로 호출하므로, 재대국(ResetBoard 등) 시에도
+    /// 이전 게임의 선택 데이터가 남아있는 phase 인스턴스를 재사용하는 버그가 없다.
+    /// </summary>
+    private static List<IDraftPhase> BuildPhases(DraftFormatSO format, ITurnOrderRule turnOrder) => new()
+    {
+        new BanPhase(format.FirstBanSlots, format.SecondBanSlots, turnOrder),
+        new PickPhase(format.FirstPickSlots, format.SecondPickSlots, turnOrder)
+    };
 
     public IDraftPhase CurrentPhase =>
         (currentPhaseIndex >= 0 && currentPhaseIndex < phases.Count) ? phases[currentPhaseIndex] : null;
@@ -54,9 +59,14 @@ public sealed class RuleManager
 
     public bool HasStarted => currentPhaseIndex >= 0;
 
-    /// <summary>드래프트 시작. Ban 페이즈부터 Enter()된다.</summary>
+    /// <summary>
+    /// 드래프트 시작(또는 재시작). 매번 페이즈를 새로 만들기 때문에
+    /// 같은 RuleManager 인스턴스로 여러 판을 이어서 진행해도 이전 판의
+    /// 밴/픽 기록이 남지 않는다.
+    /// </summary>
     public void StartDraft()
     {
+        phases = BuildPhases(format, turnOrder);
         usedCharacterIds.Clear();
         currentPhaseIndex = 0;
         CurrentPhase.Enter();
