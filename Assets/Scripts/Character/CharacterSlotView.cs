@@ -12,7 +12,13 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
     [SerializeField] private TMP_Text nameText;
     [SerializeField] private TMP_Text levelText;
     [SerializeField] private Image[] rarityStars;
-    [SerializeField] private GameObject lockOverlay;
+    [SerializeField] private Image lockOverlay; // GameObject -> Image: on/off뿐 아니라 색으로 락/밴픽사용중 구분
+
+    [Header("Lock Overlay Colors")]
+    [Tooltip("data.IsLocked == true (미보유 캐릭터)일 때 오버레이 색")]
+    [SerializeField] private Color lockedOverlayColor = new(0f, 0f, 0f, 0.6f);
+    [Tooltip("드래프트에서 이미 밴/픽되어 선택 불가할 때 오버레이 색")]
+    [SerializeField] private Color draftUnavailableOverlayColor = new(0.5f, 0f, 0f, 0.6f);
 
     [Header("Refs - Icons")]
     [SerializeField] private Image affiliationIcon;
@@ -65,7 +71,7 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
     }
 
     // 메인 바인딩 함수
-    public void Bind(int dataIndex, in CharacterViewData data, Action<int> onClick, CharacterArtProvider artProvider)
+    public void Bind(int dataIndex, in CharacterViewData data, Action<int> onClick, CharacterArtProvider artProvider, bool isDraftUnavailable = false)
     {
         _boundIndex = dataIndex;
         _onClickIndex = onClick;
@@ -73,7 +79,8 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         // 1. 기본 텍스트 및 상태 설정
         SetNameAndStats(data);
         UpdateRarityStars(data.Rarity);
-        
+        ApplyLockOverlay(data.IsLocked, isDraftUnavailable);
+
         // 2. 아이콘 로딩 (로더에게 위임)
         LoadIcons(data);
 
@@ -88,13 +95,37 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         }
     }
 
+    /// <summary>
+    /// 드래프트 진행 중 특정 캐릭터가 밴/픽되어 더 이상 선택 불가능해졌을 때,
+    /// 재바인딩 없이 오버레이만 갱신하고 싶을 때 사용 (선택적 최적화용).
+    /// 보통은 CharacterGridViewAdapter가 Bind() 시점에 isDraftUnavailable을 같이 넘겨준다.
+    /// </summary>
+    public void SetDraftUnavailable(bool isDraftUnavailable) => ApplyLockOverlay(_lastIsLocked, isDraftUnavailable);
+
+    private bool _lastIsLocked;
+
+    private void ApplyLockOverlay(bool isLocked, bool isDraftUnavailable)
+    {
+        _lastIsLocked = isLocked;
+
+        if (!lockOverlay) return;
+
+        bool shouldShow = isLocked || isDraftUnavailable;
+        lockOverlay.gameObject.SetActive(shouldShow);
+
+        if (shouldShow)
+        {
+            // 드래프트 사용 상태를 우선 표시 (밴/픽된 캐릭터라는 정보가 더 즉각적으로 중요함)
+            lockOverlay.color = isDraftUnavailable ? draftUnavailableOverlayColor : lockedOverlayColor;
+        }
+    }
+
     private void SetNameAndStats(in CharacterViewData data)
     {
         if (nameText) nameText.text = data.DisplayName;
         if (levelText) levelText.text = $"Lv {data.Level}";
         if (roleText) roleText.text = data.Role.ToString();
         if (positionText) positionText.text = data.Position.ToString();
-        if (lockOverlay) lockOverlay.SetActive(data.IsLocked);
     }
 
     private void LoadIcons(in CharacterViewData data)

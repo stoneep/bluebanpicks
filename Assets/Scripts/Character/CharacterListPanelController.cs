@@ -57,12 +57,26 @@ public sealed class CharacterListPanelController : MonoBehaviour
         state.OnStateChanged += RefreshView;
     }
 
+    private void RefreshView() => RefreshView(jumpToTop: true);
+
+    private void RefreshView(bool jumpToTop)
+    {
+        engine.SetSort(state.GetComparison());
+        engine.Rebuild(jumpToTop);
+    }
+
     private void OnEnable()
     {
         if (affiliationBar) affiliationBar.OnValueChanged += OnQuickAffiliationChanged;
         if (tacticalRoleBar) tacticalRoleBar.OnValueChanged += OnQuickRoleChanged;
         if (searchBar) searchBar.OnValueChanged += OnSearchTextChanged;
         if (view) view.OnCharacterPicked += HandleCharacterPicked;
+
+        if (draftBoardController)
+        {
+            view.SetAvailabilityPredicate(draftBoardController.IsCharacterAvailable);
+            draftBoardController.OnActionSubmitted += HandleDraftActionSubmitted;
+        }
         
         RefreshView();
     }
@@ -73,6 +87,11 @@ public sealed class CharacterListPanelController : MonoBehaviour
         if (tacticalRoleBar) tacticalRoleBar.OnValueChanged -= OnQuickRoleChanged;
         if (searchBar) searchBar.OnValueChanged -= OnSearchTextChanged;
         if (view) view.OnCharacterPicked -= HandleCharacterPicked;
+
+        if (draftBoardController)
+        {
+            draftBoardController.OnActionSubmitted -= HandleDraftActionSubmitted;
+        }
     }
     
     private void ApplyContext(CharacterFilterContext context)
@@ -133,12 +152,6 @@ public sealed class CharacterListPanelController : MonoBehaviour
         PreloadPortraits(allData);
     }
 
-    private void RefreshView()
-    {
-        engine.SetSort(state.GetComparison());
-        engine.Rebuild(jumpToTop: true);
-    }
-
     // ═══════════════════════════════════════
     //  ★ 밴픽 연결
     // ═══════════════════════════════════════
@@ -157,6 +170,17 @@ public sealed class CharacterListPanelController : MonoBehaviour
             Debug.LogWarning($"[{nameof(CharacterListPanelController)}] 밴/픽 실패: {error}");
             OnDraftSubmitFailed?.Invoke(error);
         }
+    }
+
+    /// <summary>
+    /// 밴/픽이 하나 성사될 때마다 방금 선택된 캐릭터를 포함해 리스트 전체의
+    /// "선택 가능 여부"가 바뀌므로, 화면에 보이는 슬롯들을 다시 바인딩해서
+    /// 락 오버레이(빨간색: 밴/픽됨)를 최신 상태로 반영한다.
+    /// 스크롤 위치를 유지해야 하므로 jumpToTop: false로 새로고침.
+    /// </summary>
+    private void HandleDraftActionSubmitted(DraftSide side, string characterId, DraftResultType type)
+    {
+        RefreshView(jumpToTop: false);
     }
 
     // ═══════════════════════════════════════

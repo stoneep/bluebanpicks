@@ -14,6 +14,10 @@ public sealed class CharacterGridViewAdapter : MonoBehaviour, IFilteredListView<
     private List<CharacterViewData> currentItems = new();
     private CharacterArtProvider artProvider;
 
+    // ★ 추가: 밴픽 등에서 "이 캐릭터를 지금 고를 수 있는가"를 물어보는 콜백.
+    // 미할당이면 항상 선택 가능한 것으로 간주 (기존 동작 그대로 유지).
+    private Func<string, bool> availabilityPredicate;
+
     private void Awake()
     {
         artProvider = new CharacterArtProvider();
@@ -29,10 +33,19 @@ public sealed class CharacterGridViewAdapter : MonoBehaviour, IFilteredListView<
         charScroller.JumpToTop();
     }
 
+    /// <summary>
+    /// 밴픽 등 외부에서 캐릭터 가용 여부를 판단하는 콜백을 등록.
+    /// 등록 후 리스트를 다시 그려야(예: Refresh) 오버레이에 반영된다.
+    /// </summary>
+    public void SetAvailabilityPredicate(Func<string, bool> predicate) => availabilityPredicate = predicate;
+
     private void BindSlot(int dataIndex, CharacterSlotView slot)
     {
         if (dataIndex < 0 || dataIndex >= currentItems.Count) return;
-        slot.Bind(dataIndex, currentItems[dataIndex], OnClicked, artProvider);
+
+        var data = currentItems[dataIndex];
+        bool isDraftUnavailable = availabilityPredicate != null && !availabilityPredicate(data.Id);
+        slot.Bind(dataIndex, data, OnClicked, artProvider, isDraftUnavailable);
     }
 
     private void OnClicked(int index)
