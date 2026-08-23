@@ -7,41 +7,58 @@ public enum DraftResultType
     Pick
 }
 
+/// <summary>
+/// 드래프트 전체 진행을 담당. IDraftFormat만 의존하므로
+/// 에디터 프리셋(DraftFormatSO)이든 대기실에서 조립한 런타임 데이터(DraftFormatData)든
+/// 동일하게 넘겨서 쓸 수 있다.
+///
+/// 라운드(IDraftFormat.Rounds) 하나당 Ban 페이즈 1개 + Pick 페이즈 1개를 순서대로 만들고,
+/// 각 라운드의 startingSide/banOrderPattern/pickOrderPattern에 따라 턴 순서가 결정된다.
+/// 즉 "전반전은 선공부터, 후반전은 후공부터" 같은 규칙은 코드가 아니라
+/// 라운드 설정(DraftRoundConfig) 값만으로 표현된다.
+/// </summary>
 public sealed class RuleManager
 {
     public event Action<IDraftPhase> OnPhaseChanged;
     public event Action<DraftSide, string, DraftResultType> OnActionSubmitted;
     public event Action OnDraftCompleted;
 
-    private readonly DraftFormatSO format;
-    private readonly ITurnOrderRule banTurnOrder;
-    private readonly ITurnOrderRule pickTurnOrder;
+    private readonly IDraftFormat format;
     private readonly HashSet<string> usedCharacterIds = new();
 
     private List<IDraftPhase> phases;
     private int currentPhaseIndex = -1;
 
-    /// <summary>
-    /// banTurnOrder/pickTurnOrder를 명시적으로 넘기면 그걸 우선 사용하고,
-    /// null로 두면 format(DraftFormatSO)에 설정된 패턴(banOrderPattern/pickOrderPattern)을
-    /// 그대로 따른다. 그 패턴마저 비어 있으면 AlternatingTurnOrderRule로 폴백한다.
-    /// 즉 "코드로 강제 지정" > "SO 인스펙터 값" > "기본 교대" 순의 우선순위.
-    /// </summary>
-    public RuleManager(DraftFormatSO format, ITurnOrderRule banTurnOrder = null, ITurnOrderRule pickTurnOrder = null)
+    public RuleManager(IDraftFormat format)
     {
-        if (!format)
+        if (format == null)
             throw new ArgumentNullException(nameof(format));
+        if (format.Rounds == null || format.Rounds.Count == 0)
+            throw new ArgumentException("최소 1개 이상의 라운드가 필요합니다.", nameof(format));
 
         this.format = format;
-        this.banTurnOrder = banTurnOrder ?? format.BuildBanTurnOrder();
-        this.pickTurnOrder = pickTurnOrder ?? format.BuildPickTurnOrder();
     }
 
-    private static List<IDraftPhase> BuildPhases(DraftFormatSO format, ITurnOrderRule banTurnOrder, ITurnOrderRule pickTurnOrder) => new()
+    private static List<IDraftPhase> BuildPhases(IDraftFormat format)
     {
-        new BanPhase(format.FirstBanSlots, format.SecondBanSlots, banTurnOrder),
-        new PickPhase(format.FirstPickSlots, format.SecondPickSlots, pickTurnOrder)
-    };
+        var phases = new List<IDraftPhase>();
+
+        foreach (var round in format.Rounds)
+        {
+            var banOrder = BuildTurnOrder(round.BanOrderPattern, round.StartingSide);
+            var pickOrder = BuildTurnOrder(round.PickOrderPattern, round.StartingSide);
+
+            phases.Add(new BanPhase(round.FirstBanSlots, round.SecondBanSlots, banOrder));
+            phases.Add(new PickPhase(round.FirstPickSlots, round.SecondPickSlots, pickOrder));
+        }
+
+        return phases;
+    }
+
+    private static ITurnOrderRule BuildTurnOrder(string pattern, DraftSide startingSide) =>
+        string.IsNullOrWhiteSpace(pattern)
+            ? new AlternatingTurnOrderRule(startingSide)
+            : SequenceTurnOrderRule.FromPattern(pattern);
 
     public IDraftPhase CurrentPhase =>
         (currentPhaseIndex >= 0 && currentPhaseIndex < phases.Count) ? phases[currentPhaseIndex] : null;
@@ -52,7 +69,7 @@ public sealed class RuleManager
 
     public void StartDraft()
     {
-        phases = BuildPhases(format, banTurnOrder, pickTurnOrder);
+        phases = BuildPhases(format);
         usedCharacterIds.Clear();
         currentPhaseIndex = 0;
         CurrentPhase.Enter();

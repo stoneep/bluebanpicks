@@ -1,45 +1,23 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 밴픽 포맷(각 그룹의 슬롯 수 + 턴 순서) 정의.
-/// 슬롯 수뿐 아니라 밴/픽 순서도 코드 수정 없이 기획자가
-/// 인스펙터에서 바꿀 수 있도록 SO에서 함께 관리한다.
+/// 밴픽 포맷(라운드별 슬롯 수 + 턴 순서)의 "에디터 프리셋 템플릿".
+///
+/// 실제 실행 중인 드래프트의 소스오브트루스는 더 이상 이 SO가 아니다.
+/// 대기실에서 이 프리셋을 불러와 DraftFormatData(런타임 데이터)로 복제한 뒤
+/// 그 복제본을 수정/네트워크 전송하고, RuleManager에는 그 복제본을 넘긴다.
+/// (에셋을 런타임에 직접 고치면 플레이 모드 종료 후에도 값이 남거나
+///  여러 매치가 같은 에셋을 공유하며 충돌할 수 있으므로 절대 금지)
 /// </summary>
 [CreateAssetMenu(menuName = "Config/DraftFormat", fileName = "DraftFormat")]
-public class DraftFormatSO : ScriptableObject
+public class DraftFormatSO : ScriptableObject, IDraftFormat
 {
-    [Header("선공 (First)")]
-    [SerializeField] private int firstPickSlots = 6;
-    [SerializeField] private int firstBanSlots = 5;
+    [Header("라운드 목록 (순서대로 진행됨: 전반전, 후반전, ...)")]
+    [SerializeField] private List<DraftRoundConfig> rounds = new();
 
-    [Header("후공 (Second)")]
-    [SerializeField] private int secondBanSlots = 5;
-    [SerializeField] private int secondPickSlots = 6;
+    public IReadOnlyList<DraftRoundConfig> Rounds => rounds;
 
-    [Header("턴 순서 (비워두면 기본 교대: A,B,A,B...)")]
-    [Tooltip("A=선공, B=후공. 예: ABABAB / ABBAAB. 슬롯 수 합계와 A/B 개수가 일치해야 함.")]
-    [SerializeField] private string banOrderPattern;
-    [Tooltip("A=선공, B=후공. 예: ABABAB / ABBAAB. 슬롯 수 합계와 A/B 개수가 일치해야 함.")]
-    [SerializeField] private string pickOrderPattern;
-
-    public int FirstPickSlots => firstPickSlots;
-    public int FirstBanSlots => firstBanSlots;
-    public int SecondBanSlots => secondBanSlots;
-    public int SecondPickSlots => secondPickSlots;
-
-    /// <summary>
-    /// banOrderPattern이 비어 있으면 기본 교대 규칙, 채워져 있으면 해당 패턴의 SequenceTurnOrderRule을 만든다.
-    /// </summary>
-    public ITurnOrderRule BuildBanTurnOrder() =>
-        string.IsNullOrWhiteSpace(banOrderPattern)
-            ? new AlternatingTurnOrderRule()
-            : SequenceTurnOrderRule.FromPattern(banOrderPattern);
-
-    /// <summary>
-    /// pickOrderPattern이 비어 있으면 기본 교대 규칙, 채워져 있으면 해당 패턴의 SequenceTurnOrderRule을 만든다.
-    /// </summary>
-    public ITurnOrderRule BuildPickTurnOrder() =>
-        string.IsNullOrWhiteSpace(pickOrderPattern)
-            ? new AlternatingTurnOrderRule()
-            : SequenceTurnOrderRule.FromPattern(pickOrderPattern);
+    /// <summary>이 프리셋을 대기실에서 편집 가능한 런타임 복사본으로 변환.</summary>
+    public DraftFormatData ToRuntimeData() => DraftFormatData.FromPreset(this);
 }
