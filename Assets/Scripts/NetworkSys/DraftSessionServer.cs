@@ -1,0 +1,209 @@
+using System;
+using Unity.Collections;
+using Unity.Netcode;
+using UnityEngine;
+
+/// <summary>
+/// 대기실(포맷/진영 편집) ~ 드래프트 진행 ~ 종료까지를 담당하는 호스트 권위형 세션.
+///
+/// 설계 원칙:
+///  - RuleManager(순수 C# 규칙 엔진)는 오직 서버(호스트)에서만 인스턴스화되고 호출된다.
+///    클라이언트는 RuleManager를 직접 만들지도, 갖고 있지도 않는다 (치팅/디싱크 방지).
+///  - 클라이언트는 이 컴포넌트의 NetworkVariable/NetworkList만 구독해서 화면을 그린다.
+///    즉 State/Format/ActionLog/CurrentSide/CurrentPhaseName이 "클라이언트가 보는 진실"이고,
+///    이 값들은 전부 서버가 RuleManager 이벤트를 받아 갱신한다.
+///  - 액션 제출은 반드시 SubmitActionServerRpc를 통해서만 이루어지고,
+///    서버가 RuleManager로 검증한 뒤 성공하면 ActionLog(NetworkList)에 추가한다.
+///    ActionLog가 곧 진행 기록이므로, 드래프트 도중 접속한 클라이언트도
+///    NetworkList의 초기 동기화만으로 지금까지의 결과를 그대로 복원할 수 있다(late-join 대응).
+/// </summary>
+public class DraftSessionServer : NetworkBehaviour
+{
+    // ---------- 대기실: 포맷 편집 ----------
+
+    /// <summary>대기실에서 호스트가 편집 중인 라운드 목록. 서버만 수정, 전원이 구독 가능.</summary>
+    public readonly NetworkList<NetworkDraftRoundConfig> Format = new();
+
+    /// <summary>선공/후공에 배정된 클라이언트 ID. ulong.MaxValue면 미배정.</summary>
+    public readonly NetworkVariable<ulong> FirstSideClientId = new(ulong.MaxValue);
+    public readonly NetworkVariable<ulong> SecondSideClientId = new(ulong.MaxValue);
+
+    public readonly NetworkVariable<DraftSessionState> State = new(DraftSessionState.Lobby);
+
+    // ---------- 진행 중 상태 (서버가 갱신, 클라는 읽기만) ----------
+
+    public readonly NetworkVariable<FixedString32Bytes> CurrentPhaseName = new();
+    public readonly NetworkVariable<DraftSide> CurrentSide = new();
+    public readonly NetworkList<NetworkDraftAction> ActionLog = new();
+
+    /// <summary>액션 거부 사유. 요청을 보낸 클라이언트에게만 전달된다 (전체 브로드캐스트 아님).</summary>
+    public event Action<string> OnActionRejected;
+
+    // 서버 전용 - 클라이언트에는 절대 존재/노출되지 않음
+    private RuleManager ruleManager;
+
+    // ==================== 대기실: 포맷/진영 편집 (호스트 전용) ====================
+
+    public void HostSetFormat(DraftFormatData data)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostSetFormat은 서버(호스트)에서만 호출할 수 있습니다.");
+            return;
+        }
+        if (State.Value != DraftSessionState.Lobby)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 포맷을 바꿀 수 없습니다.");
+            return;
+        }
+
+        data.CopyTo(Format);
+    }
+
+    public void HostAssignSides(ulong firstClientId, ulong secondClientId)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostAssignSides는 서버(호스트)에서만 호출할 수 있습니다.");
+            return;
+        }
+        if (State.Value != DraftSessionState.Lobby)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 진영을 다시 배정할 수 없습니다.");
+            return;
+        }
+        if (firstClientId == secondClientId)
+        {
+            Debug.LogError($"[{nameof(DraftSessionServer)}] 선공/후공에 같은 클라이언트를 배정할 수 없습니다.");
+            return;
+        }
+
+        FirstSideClientId.Value = firstClientId;
+        SecondSideClientId.Value = secondClientId;
+    }
+
+    // ==================== 대기실 -> 드래프트 시작 (호스트 전용) ====================
+
+    public void HostStartDraft()
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostStartDraft는 서버(호스트)에서만 호출할 수 있습니다.");
+            return;
+        }
+        if (State.Value != DraftSessionState.Lobby)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 이미 시작됐거나 종료된 세션입니다.");
+            return;
+        }
+        if (Format.Count == 0)
+        {
+            Debug.LogError($"[{nameof(DraftSessionServer)}] 라운드가 1개 이상 있어야 드래프트를 시작할 수 있습니다.");
+            return;
+        }
+        if (FirstSideClientId.Value == ulong.MaxValue || SecondSideClientId.Value == ulong.MaxValue)
+        {
+            Debug.LogError($"[{nameof(DraftSessionServer)}] 선공/후공 진영이 아직 배정되지 않았습니다.");
+            return;
+        }
+
+        var formatData = Format.ToDraftFormatData();
+
+        ruleManager = new RuleManager(formatData);
+        ruleManager.OnActionSubmitted += HandleServerActionSubmitted;
+        ruleManager.OnPhaseChanged += HandleServerPhaseChanged;
+        ruleManager.OnDraftCompleted += HandleServerDraftCompleted;
+
+        ActionLog.Clear();
+        State.Value = DraftSessionState.InProgress;
+        ruleManager.StartDraft();
+    }
+
+    // ==================== 진행 중: 액션 제출 (모든 클라이언트) ====================
+
+    [ServerRpc(RequireOwnership = false)]
+    public void SubmitActionServerRpc(string characterId, ServerRpcParams rpcParams = default)
+    {
+        var senderClientId = rpcParams.Receive.SenderClientId;
+
+        if (State.Value != DraftSessionState.InProgress || ruleManager == null)
+        {
+            RejectClientRpc("드래프트가 진행 중이 아닙니다.", ToTarget(senderClientId));
+            return;
+        }
+
+        if (!TryResolveSide(senderClientId, out var side))
+        {
+            RejectClientRpc("이 세션에 배정된 진영이 아닙니다.", ToTarget(senderClientId));
+            return;
+        }
+
+        if (!ruleManager.SubmitAction(side, characterId, out var error))
+        {
+            RejectClientRpc(error, ToTarget(senderClientId));
+        }
+
+        // 성공했을 때는 별도로 브로드캐스트하지 않는다.
+        // HandleServerActionSubmitted가 ActionLog(NetworkList)에 추가하고,
+        // NetworkList/NetworkVariable의 자동 동기화가 모든 클라이언트(및 이후 접속자)에게 전파한다.
+    }
+
+    private bool TryResolveSide(ulong clientId, out DraftSide side)
+    {
+        if (clientId == FirstSideClientId.Value) { side = DraftSide.First; return true; }
+        if (clientId == SecondSideClientId.Value) { side = DraftSide.Second; return true; }
+        side = default;
+        return false;
+    }
+
+    private static ClientRpcParams ToTarget(ulong clientId) => new ClientRpcParams
+    {
+        Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } }
+    };
+
+    [ClientRpc]
+    private void RejectClientRpc(string reason, ClientRpcParams rpcParams = default) =>
+        OnActionRejected?.Invoke(reason);
+
+    // ==================== 서버 내부: RuleManager 이벤트 -> 동기화 데이터 반영 ====================
+
+    private void HandleServerActionSubmitted(DraftSide side, string characterId, DraftResultType type)
+    {
+        ActionLog.Add(new NetworkDraftAction
+        {
+            side = side,
+            characterId = characterId,
+            resultType = type
+        });
+    }
+
+    private void HandleServerPhaseChanged(IDraftPhase phase)
+    {
+        CurrentPhaseName.Value = phase.PhaseName;
+        CurrentSide.Value = phase.CurrentSide;
+    }
+
+    private void HandleServerDraftCompleted()
+    {
+        State.Value = DraftSessionState.Completed;
+    }
+
+    public override void OnDestroy()
+    {
+        if (ruleManager != null)
+        {
+            ruleManager.OnActionSubmitted -= HandleServerActionSubmitted;
+            ruleManager.OnPhaseChanged -= HandleServerPhaseChanged;
+            ruleManager.OnDraftCompleted -= HandleServerDraftCompleted;
+        }
+        base.OnDestroy();
+    }
+}
+
+/// <summary>대기실(설정 편집) → 진행 중 → 종료, 세션의 큰 흐름.</summary>
+public enum DraftSessionState
+{
+    Lobby,
+    InProgress,
+    Completed
+}
