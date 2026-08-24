@@ -19,6 +19,20 @@ using UnityEngine;
 /// </summary>
 public class DraftSessionServer : NetworkBehaviour
 {
+    /// <summary>
+    /// 현재 스폰돼 있는 세션 인스턴스. 서버/클라이언트 구분 없이,
+    /// "이 로컬 프로세스에 이 NetworkObject가 동기화 완료된 시점"에 채워진다.
+    /// DraftBoardController처럼 씬에 미리 배치되지 않은 스크립트가
+    /// 런타임에 세션을 찾아 Bind()할 때 이 값을 쓰면 된다.
+    /// </summary>
+    public static DraftSessionServer Instance { get; private set; }
+
+    /// <summary>
+    /// Instance가 채워지는 시점(OnNetworkSpawn)에 발행. 이미 스폰된 이후에 구독하면
+    /// 놓칠 수 있으므로, 구독 전에 항상 Instance가 이미 null이 아닌지 먼저 확인할 것.
+    /// </summary>
+    public static event Action<DraftSessionServer> OnSessionReady;
+
     // ---------- 대기실: 포맷 편집 ----------
 
     /// <summary>대기실에서 호스트가 편집 중인 라운드 목록. 서버만 수정, 전원이 구독 가능.</summary>
@@ -41,6 +55,17 @@ public class DraftSessionServer : NetworkBehaviour
 
     // 서버 전용 - 클라이언트에는 절대 존재/노출되지 않음
     private RuleManager ruleManager;
+
+    public override void OnNetworkSpawn()
+    {
+        Instance = this;
+        OnSessionReady?.Invoke(this);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (Instance == this) Instance = null;
+    }
 
     // ==================== 대기실: 포맷/진영 편집 (호스트 전용) ====================
 
@@ -196,6 +221,7 @@ public class DraftSessionServer : NetworkBehaviour
             ruleManager.OnPhaseChanged -= HandleServerPhaseChanged;
             ruleManager.OnDraftCompleted -= HandleServerDraftCompleted;
         }
+        if (Instance == this) Instance = null;
         base.OnDestroy();
     }
 }
