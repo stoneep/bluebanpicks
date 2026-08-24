@@ -17,6 +17,9 @@ public class DraftRoundRowView : MonoBehaviour
     [SerializeField] private TMP_InputField firstPickField;
     [SerializeField] private TMP_InputField secondPickField;
     [SerializeField] private TMP_Dropdown startingSideDropdown; // Option 0 = 선공, 1 = 후공
+    [Tooltip("비워두면 startingSide 기준 단순 교대. 채우면 이게 우선한다. 예: ABBAAB")]
+    [SerializeField] private TMP_InputField banOrderPatternField;
+    [SerializeField] private TMP_InputField pickOrderPatternField;
     [SerializeField] private Button removeButton;
 
     /// <summary>필드 값이 바뀌었을 때 (호스트만 구독해서 서버에 반영하면 됨).</summary>
@@ -35,6 +38,8 @@ public class DraftRoundRowView : MonoBehaviour
         firstPickField.onEndEdit.AddListener(_ => RaiseEdited());
         secondPickField.onEndEdit.AddListener(_ => RaiseEdited());
         startingSideDropdown.onValueChanged.AddListener(_ => RaiseEdited());
+        banOrderPatternField.onEndEdit.AddListener(_ => RaiseEdited());
+        pickOrderPatternField.onEndEdit.AddListener(_ => RaiseEdited());
         removeButton.onClick.AddListener(() => OnRemoveRequested?.Invoke());
     }
 
@@ -46,6 +51,8 @@ public class DraftRoundRowView : MonoBehaviour
         firstPickField.interactable = interactable;
         secondPickField.interactable = interactable;
         startingSideDropdown.interactable = interactable;
+        banOrderPatternField.interactable = interactable;
+        pickOrderPatternField.interactable = interactable;
         removeButton.interactable = interactable;
     }
 
@@ -60,6 +67,8 @@ public class DraftRoundRowView : MonoBehaviour
         firstPickField.text = round.FirstPickSlots.ToString();
         secondPickField.text = round.SecondPickSlots.ToString();
         startingSideDropdown.value = round.StartingSide == DraftSide.First ? 0 : 1;
+        banOrderPatternField.text = round.BanOrderPattern;
+        pickOrderPatternField.text = round.PickOrderPattern;
 
         suppressEvents = false;
     }
@@ -69,12 +78,49 @@ public class DraftRoundRowView : MonoBehaviour
         ParseNonNegativeInt(firstBanField.text), ParseNonNegativeInt(secondBanField.text),
         ParseNonNegativeInt(firstPickField.text), ParseNonNegativeInt(secondPickField.text),
         startingSideDropdown.value == 0 ? DraftSide.First : DraftSide.Second,
-        roundNameField.text);
+        roundNameField.text,
+        banOrderPatternField.text?.Trim() ?? "",
+        pickOrderPatternField.text?.Trim() ?? "");
 
     private void RaiseEdited()
     {
         if (suppressEvents) return;
+        WarnIfPatternMismatched();
         OnEdited?.Invoke();
+    }
+
+    /// <summary>
+    /// 패턴의 A/B 개수가 슬롯 수와 안 맞으면, 드래프트 시작 시 서버(SequenceTurnOrderRule.Validate)에서
+    /// 예외로 터지기 전에 편집 시점에 미리 콘솔로 경고한다. (인스펙터에 별도 경고 UI가 없다면
+    /// 이 로그가 유일한 신호이므로, 실사용 시엔 이 자리에 경고 아이콘/텍스트를 붙이는 걸 권장)
+    /// </summary>
+    private void WarnIfPatternMismatched()
+    {
+        WarnIfMismatched(banOrderPatternField.text, ParseNonNegativeInt(firstBanField.text), ParseNonNegativeInt(secondBanField.text), "밴");
+        WarnIfMismatched(pickOrderPatternField.text, ParseNonNegativeInt(firstPickField.text), ParseNonNegativeInt(secondPickField.text), "픽");
+    }
+
+    private void WarnIfMismatched(string pattern, int firstSlots, int secondSlots, string label)
+    {
+        if (string.IsNullOrWhiteSpace(pattern)) return;
+
+        int firstCount = 0, secondCount = 0;
+        foreach (var raw in pattern.Trim())
+        {
+            char c = char.ToUpperInvariant(raw);
+            if (c == 'A') { firstCount++; continue; }
+            if (c == 'B') { secondCount++; continue; }
+
+            Debug.LogWarning($"[{nameof(DraftRoundRowView)}] {label} 패턴에 A/B가 아닌 문자('{raw}')가 있습니다.");
+            return;
+        }
+
+        if (firstCount != firstSlots || secondCount != secondSlots)
+        {
+            Debug.LogWarning(
+                $"[{nameof(DraftRoundRowView)}] {label} 패턴 '{pattern}'의 구성(A={firstCount}/B={secondCount})이 " +
+                $"슬롯 수(선공={firstSlots}/후공={secondSlots})와 다릅니다. 이대로 드래프트를 시작하면 서버에서 예외가 발생합니다.");
+        }
     }
 
     private static int ParseNonNegativeInt(string text) =>

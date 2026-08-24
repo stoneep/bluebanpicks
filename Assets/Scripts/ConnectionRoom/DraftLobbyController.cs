@@ -23,6 +23,7 @@ public class DraftLobbyController : MonoBehaviour
     [SerializeField] private DraftRoundRowView roundRowPrefab;
     [SerializeField] private Button addRoundButton;
     [SerializeField] private Button flipLastRoundButton; // 마지막 라운드를 복제 + 이니셔티브 반전해서 추가
+    [SerializeField] private Button applyLolPresetButton; // 전반 ABABAB/ABBAAB, 후반 BABA/BAABBA 한 번에 적용 (테스트용)
 
     [Header("Session Controls (호스트 전용)")]
     [SerializeField] private Button autoAssignSidesButton;
@@ -38,6 +39,7 @@ public class DraftLobbyController : MonoBehaviour
     {
         addRoundButton.onClick.AddListener(HandleAddRound);
         flipLastRoundButton.onClick.AddListener(HandleFlipLastRound);
+        applyLolPresetButton.onClick.AddListener(HandleApplyLolPreset);
         autoAssignSidesButton.onClick.AddListener(HandleAutoAssignSides);
         startDraftButton.onClick.AddListener(HandleStartDraft);
     }
@@ -157,6 +159,33 @@ public class DraftLobbyController : MonoBehaviour
         session.HostSetFormat(data);
     }
 
+    /// <summary>
+    /// 논의했던 정확한 규칙(전반 밴 ABABAB / 전반 픽 ABBAAB / 후반 밴 BABA / 후반 픽 BAABBA)을
+    /// 기존 라운드를 전부 지우고 한 번에 적용한다. 빠른 테스트/데모용.
+    /// </summary>
+    private void HandleApplyLolPreset()
+    {
+        var data = new DraftFormatData();
+
+        data.AddRound(new DraftRoundConfig(
+            firstBanSlots: 3, secondBanSlots: 3,
+            firstPickSlots: 3, secondPickSlots: 3,
+            startingSide: DraftSide.First,
+            roundName: "전반",
+            banOrderPattern: "ABABAB",
+            pickOrderPattern: "ABBAAB"));
+
+        data.AddRound(new DraftRoundConfig(
+            firstBanSlots: 2, secondBanSlots: 2,
+            firstPickSlots: 3, secondPickSlots: 3,
+            startingSide: DraftSide.Second,
+            roundName: "후반",
+            banOrderPattern: "BABA",
+            pickOrderPattern: "BAABBA"));
+
+        session.HostSetFormat(data);
+    }
+
     private DraftFormatData CollectCurrentRows()
     {
         var data = new DraftFormatData();
@@ -206,6 +235,7 @@ public class DraftLobbyController : MonoBehaviour
 
         addRoundButton.interactable = editable;
         flipLastRoundButton.interactable = editable;
+        applyLolPresetButton.interactable = editable;
         autoAssignSidesButton.interactable = editable;
         startDraftButton.interactable = editable;
     }
