@@ -59,6 +59,8 @@ public class DraftBoardController : MonoBehaviour
     private void Start()
     {
         if (session != null) Bind(session);
+        else if (DraftSessionServer.Instance != null) Bind(DraftSessionServer.Instance);
+        else DraftSessionServer.OnSessionReady += Bind;
     }
 
     private void OnDestroy() => Unbind();

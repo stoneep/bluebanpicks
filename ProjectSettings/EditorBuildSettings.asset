@@ -9,12 +9,15 @@ EditorBuildSettings:
     path: Assets/Scenes/MainLobby.unity
     guid: 2cda990e2423bbf4892e6590ba056729
   - enabled: 1
+    path: Assets/Scenes/ConnectionLobby.unity
+    guid: 66edf6a109c81254c83ec30c91edb6e7
+  - enabled: 0
     path: Assets/Scenes/Scene_LessonViewer.unity
     guid: aa6c16073e6b76049bcb9c4030b5c163
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/CampaignLobby.unity
     guid: 0d5e129ef405fba469f10104161fbbbc
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/CampaignFolder/Campaign_Mission.unity
     guid: 300a72e0250dbdf4b95ce4174826cf9a
   m_configObjects:
