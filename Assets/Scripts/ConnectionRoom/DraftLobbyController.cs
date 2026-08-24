@@ -197,17 +197,29 @@ public class DraftLobbyController : MonoBehaviour
 
     // ==================== 진영 배정 / 시작 ====================
 
+    /// <summary>
+    /// 역할 규칙: 호스트는 항상 관전자다. 드래프트에 실제로 참가하는(선공/후공)
+    /// 클라이언트는 호스트를 제외한 나머지 접속자들 중에서만 뽑는다.
+    /// (서버 쪽 DraftSessionServer.HostAssignSides에도 같은 규칙이 최종 방어선으로 들어가 있음)
+    /// </summary>
     private void HandleAutoAssignSides()
     {
-        var ids = NetworkManager.Singleton.ConnectedClientsIds;
-        if (ids.Count < 2)
+        var players = new List<ulong>();
+        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
         {
-            SetStatus("진영을 배정하려면 2명 이상 접속해야 합니다. (현재 " + ids.Count + "명)");
+            if (id == NetworkManager.ServerClientId) continue; // 호스트=관전자, 배정 대상에서 제외
+            players.Add(id);
+        }
+
+        if (players.Count < 2)
+        {
+            SetStatus($"진영을 배정하려면 호스트를 제외한 참가자가 2명 이상 접속해야 합니다. " +
+                      $"(현재 참가자 {players.Count}명, 호스트는 관전자)");
             return;
         }
 
         // 테스트용 단순 규칙: 접속 순서 그대로 선공/후공.
-        session.HostAssignSides(ids[0], ids[1]);
+        session.HostAssignSides(players[0], players[1]);
     }
 
     private void HandleStartDraft() => session.HostStartDraft();
@@ -256,7 +268,9 @@ public class DraftLobbyController : MonoBehaviour
             ? "진영 미배정"
             : $"선공=클라{session.FirstSideClientId.Value} / 후공=클라{session.SecondSideClientId.Value}";
 
-        SetStatus($"[{state}] {sides}");
+        string hostRole = $"호스트(클라{NetworkManager.ServerClientId})=관전";
+
+        SetStatus($"[{state}] {hostRole} / {sides}");
     }
 
     private void SetStatus(string message)

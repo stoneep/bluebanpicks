@@ -109,6 +109,15 @@ public class DraftSessionServer : NetworkBehaviour
             Debug.LogError($"[{nameof(DraftSessionServer)}] 선공/후공에 같은 클라이언트를 배정할 수 없습니다.");
             return;
         }
+        if (firstClientId == NetworkManager.ServerClientId || secondClientId == NetworkManager.ServerClientId)
+        {
+            // 역할 규칙: 호스트(=ServerClientId)는 항상 관전자다. 드래프트 참가자(선공/후공)는
+            // 반드시 호스트가 아닌 클라이언트여야 한다. 이 체크는 서버 권위 지점이므로
+            // 호출부(UI)가 실수로 호스트를 넘기더라도 여기서 최종적으로 막는다.
+            Debug.LogError($"[{nameof(DraftSessionServer)}] 호스트(clientId={NetworkManager.ServerClientId})는 관전자이므로 " +
+                            "선공/후공에 배정할 수 없습니다.");
+            return;
+        }
 
         FirstSideClientId.Value = firstClientId;
         SecondSideClientId.Value = secondClientId;
