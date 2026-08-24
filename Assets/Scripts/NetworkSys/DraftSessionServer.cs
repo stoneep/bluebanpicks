@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 대기실(포맷/진영 편집) ~ 드래프트 진행 ~ 종료까지를 담당하는 호스트 권위형 세션.
@@ -43,6 +45,11 @@ public class DraftSessionServer : NetworkBehaviour
     public readonly NetworkVariable<ulong> SecondSideClientId = new(ulong.MaxValue);
 
     public readonly NetworkVariable<DraftSessionState> State = new(DraftSessionState.Lobby);
+
+    [Header("Scene Transition")]
+    [Tooltip("드래프트 시작 시 전환할 씬 이름. Build Settings(File > Build Settings > Scenes In Build)에 " +
+             "먼저 등록되어 있어야 하고, NetworkManager 인스펙터에서 Enable Scene Management가 켜져 있어야 한다.")]
+    [SerializeField] private string draftSceneName = "MainLobby";
 
     // ---------- 진행 중 상태 (서버가 갱신, 클라는 읽기만) ----------
 
@@ -132,6 +139,47 @@ public class DraftSessionServer : NetworkBehaviour
             return;
         }
 
+        var sceneManager = NetworkManager.SceneManager;
+        if (sceneManager == null)
+        {
+            Debug.LogError($"[{nameof(DraftSessionServer)}] NetworkManager의 Scene Management가 꺼져 있습니다. " +
+                            "인스펙터에서 Enable Scene Management를 켜주세요.");
+            return;
+        }
+
+        sceneManager.OnLoadEventCompleted += HandleDraftSceneLoaded;
+        var status = sceneManager.LoadScene(draftSceneName, LoadSceneMode.Single);
+
+        if (status != SceneEventProgressStatus.Started)
+        {
+            sceneManager.OnLoadEventCompleted -= HandleDraftSceneLoaded;
+            Debug.LogError($"[{nameof(DraftSessionServer)}] 씬 전환을 시작하지 못했습니다: {status}. " +
+                            $"씬 '{draftSceneName}'이 Build Settings에 등록되어 있는지 확인하세요.");
+        }
+    }
+
+    /// <summary>
+    /// 서버와 모든 클라이언트가 draftSceneName 로드를 마쳤을 때 호출됨.
+    /// 이 시점부터 실제로 밴/픽을 시작한다 - 씬 전환 중에 이미 턴이 진행되어
+    /// 일부 클라이언트가 첫 턴을 놓치는 상황을 막기 위함.
+    /// </summary>
+    private void HandleDraftSceneLoaded(string sceneName, LoadSceneMode mode, List<ulong> clientsCompleted, List<ulong> clientsTimedOut)
+    {
+        if (sceneName != draftSceneName) return;
+
+        NetworkManager.SceneManager.OnLoadEventCompleted -= HandleDraftSceneLoaded;
+
+        if (clientsTimedOut != null && clientsTimedOut.Count > 0)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 씬 로드에 실패한 클라이언트: " +
+                              string.Join(",", clientsTimedOut));
+        }
+
+        BeginDraft();
+    }
+
+    private void BeginDraft()
+    {
         var formatData = Format.ToDraftFormatData();
 
         ruleManager = new RuleManager(formatData);
@@ -220,6 +268,10 @@ public class DraftSessionServer : NetworkBehaviour
             ruleManager.OnActionSubmitted -= HandleServerActionSubmitted;
             ruleManager.OnPhaseChanged -= HandleServerPhaseChanged;
             ruleManager.OnDraftCompleted -= HandleServerDraftCompleted;
+        }
+        if (NetworkManager != null && NetworkManager.SceneManager != null)
+        {
+            NetworkManager.SceneManager.OnLoadEventCompleted -= HandleDraftSceneLoaded;
         }
         if (Instance == this) Instance = null;
         base.OnDestroy();

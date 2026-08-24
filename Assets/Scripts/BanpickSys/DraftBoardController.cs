@@ -58,12 +58,27 @@ public class DraftBoardController : MonoBehaviour
 
     private void Start()
     {
-        if (session != null) Bind(session);
-        else if (DraftSessionServer.Instance != null) Bind(DraftSessionServer.Instance);
-        else DraftSessionServer.OnSessionReady += Bind;
+        if (session != null)
+        {
+            Bind(session);
+        }
+        else if (DraftSessionServer.Instance != null)
+        {
+            // 씬 전환(ConnectionLobby -> MainLobby) 이전에 이미 스폰되어 살아있는 세션을 그대로 찾아 바인딩.
+            Bind(DraftSessionServer.Instance);
+        }
+        else
+        {
+            // 극히 드문 타이밍(이 오브젝트의 Start가 세션 스폰보다 먼저 실행되는 경우)에 대한 안전망.
+            DraftSessionServer.OnSessionReady += Bind;
+        }
     }
 
-    private void OnDestroy() => Unbind();
+    private void OnDestroy()
+    {
+        DraftSessionServer.OnSessionReady -= Bind;
+        Unbind();
+    }
 
     // ==================== 바인딩 ====================
 
@@ -74,6 +89,8 @@ public class DraftBoardController : MonoBehaviour
             Debug.LogError($"[{nameof(DraftBoardController)}] Bind에 null 세션이 전달되었습니다.");
             return;
         }
+
+        DraftSessionServer.OnSessionReady -= Bind; // Start()의 안전망 구독이었다면 여기서 정리
 
         if (session != null) Unbind();
         session = newSession;
