@@ -53,6 +53,14 @@ public class DraftBoardController : MonoBehaviour
     public event Action<string> OnActionRejected;
 
     public bool IsDraftComplete => session != null && session.State.Value == DraftSessionState.Completed;
+
+    /// <summary>
+    /// 지금 이 컨트롤러가 실제로 "진행 중"인 드래프트 세션에 연결되어 있는지.
+    /// 세션이 아직 대기실(Lobby)이거나, 종료(Completed)됐거나, 아직 Bind() 전이면 false.
+    /// SubmitCharacter를 부르기 전에 이걸로 먼저 걸러내면, 진행 중이 아닌 화면에서 클릭했을 때
+    /// 불필요한 서버 왕복과 혼란스러운 OnActionRejected를 피할 수 있다.
+    /// </summary>
+    public bool IsSessionActive => session != null && session.State.Value == DraftSessionState.InProgress;
     public DraftSide? CurrentSide => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentSide.Value : null;
     public string CurrentPhaseName => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentPhaseName.Value.ToString() : null;
 
@@ -129,6 +137,15 @@ public class DraftBoardController : MonoBehaviour
         if (session == null)
         {
             Debug.LogWarning($"[{nameof(DraftBoardController)}] 세션이 바인딩되지 않아 요청을 보낼 수 없습니다.");
+            return;
+        }
+
+        if (session.State.Value != DraftSessionState.InProgress)
+        {
+            // 대기실/종료 상태에서의 클릭은 서버에 물어볼 필요도 없이 이미 결과를 알 수 있다.
+            // (같은 화면/프리팹이 "밴픽 화면"과 "일반 캐릭터 목록 화면" 양쪽에 재사용되는 경우
+            //  대기실 상태에서 클릭이 들어오면 여기서 조용히 걸러진다)
+            Debug.Log($"[{nameof(DraftBoardController)}] 드래프트가 진행 중이 아니라 요청을 보내지 않았습니다. (State={session.State.Value})");
             return;
         }
 

@@ -171,6 +171,15 @@ public sealed class CharacterListPanelController : MonoBehaviour
     {
         if (!draftBoardController) return; // 밴픽 화면이 아니면 무시
 
+        if (!draftBoardController.IsSessionActive)
+        {
+            // 이 화면이 대기실 상태로 떠 있거나, draftBoardController가 실수로 계속 할당돼 있는
+            // "일반" 목록 화면인 경우 - 서버에 물어볼 필요 없이 여기서 조용히 무시한다.
+            // 만약 이 화면이 앞으로도 절대 밴픽에 쓰이지 않는다면, draftBoardController 필드 자체를
+            // 인스펙터에서 비워두는 게 더 명확하다.
+            return;
+        }
+
         draftBoardController.SubmitCharacter(data.Id);
     }
 

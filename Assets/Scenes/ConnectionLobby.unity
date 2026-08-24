@@ -2623,8 +2623,16 @@ PrefabInstance:
       value: DraftServer
       objectReference: {fileID: 0}
     - target: {fileID: 6586881568415840925, guid: 7acb656dcfedf0443b0539da52dc699b, type: 3}
+      propertyPath: m_InScenePlaced
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6586881568415840925, guid: 7acb656dcfedf0443b0539da52dc699b, type: 3}
       propertyPath: GlobalObjectIdHash
       value: 899553485
+      objectReference: {fileID: 0}
+    - target: {fileID: 6586881568415840925, guid: 7acb656dcfedf0443b0539da52dc699b, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 3295132065
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
