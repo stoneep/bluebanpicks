@@ -12,7 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8cda92642010fac4cae797295489d49d, type: 3}
   m_Name: DraftFormat
   m_EditorClassIdentifier: 
-  firstPickSlots: 6
-  firstBanSlots: 5
-  secondBanSlots: 5
-  secondPickSlots: 6
+  rounds:
+  - roundName: 
+    firstBanSlots: 5
+    secondBanSlots: 5
+    firstPickSlots: 6
+    secondPickSlots: 6
+    startingSide: 0
+    banOrderPattern: 
+    pickOrderPattern: 

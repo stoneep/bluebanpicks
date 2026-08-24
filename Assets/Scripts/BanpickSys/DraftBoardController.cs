@@ -46,10 +46,10 @@ public class DraftBoardController : MonoBehaviour
             return;
         }
 
-        firstPickBar.ApplyConfig(PickSlotBarConfig.Of(format.FirstPickSlots));
-        firstBanBar.ApplyConfig(PickSlotBarConfig.Of(format.FirstBanSlots));
-        secondBanBar.ApplyConfig(PickSlotBarConfig.Of(format.SecondBanSlots));
-        secondPickBar.ApplyConfig(PickSlotBarConfig.Of(format.SecondPickSlots));
+        // firstPickBar.ApplyConfig(PickSlotBarConfig.Of(format.FirstPickSlots));
+        // firstBanBar.ApplyConfig(PickSlotBarConfig.Of(format.FirstBanSlots));
+        // secondBanBar.ApplyConfig(PickSlotBarConfig.Of(format.SecondBanSlots));
+        // secondPickBar.ApplyConfig(PickSlotBarConfig.Of(format.SecondPickSlots));
 
         ruleManager = new RuleManager(format);
         ruleManager.OnActionSubmitted += HandleActionSubmitted;
