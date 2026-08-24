@@ -76,6 +76,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
         {
             view.SetAvailabilityPredicate(draftBoardController.IsCharacterAvailable);
             draftBoardController.OnActionSubmitted += HandleDraftActionSubmitted;
+            draftBoardController.OnActionRejected += HandleDraftActionRejected;
         }
         
         RefreshView();
@@ -91,6 +92,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
         if (draftBoardController)
         {
             draftBoardController.OnActionSubmitted -= HandleDraftActionSubmitted;
+            draftBoardController.OnActionRejected -= HandleDraftActionRejected;
         }
     }
     
@@ -158,18 +160,25 @@ public sealed class CharacterListPanelController : MonoBehaviour
 
     /// <summary>
     /// 리스트에서 캐릭터를 클릭했을 때. draftBoardController가 할당돼 있으면
-    /// 곧바로 SubmitCharacter로 넘긴다 - "지금 누구 차례인가" 같은 판단은
-    /// 전부 RuleManager 쪽 책임이고 여기서는 결과(성공/실패)만 처리한다.
+    /// 곧바로 SubmitCharacter로 요청을 보낸다 - "지금 누구 차례인가" 같은 판단은
+    /// 전부 서버(RuleManager) 쪽 책임이다.
+    ///
+    /// 서버 왕복이 필요해서 이 시점엔 성공/실패를 알 수 없다:
+    ///  - 성공하면 ActionLog 동기화로 HandleDraftActionSubmitted가 나중에 불린다.
+    ///  - 실패하면 HandleDraftActionRejected가 비동기로 사유와 함께 불린다.
     /// </summary>
     private void HandleCharacterPicked(CharacterViewData data)
     {
         if (!draftBoardController) return; // 밴픽 화면이 아니면 무시
 
-        if (!draftBoardController.SubmitCharacter(data.Id, out var error))
-        {
-            Debug.LogWarning($"[{nameof(CharacterListPanelController)}] 밴/픽 실패: {error}");
-            OnDraftSubmitFailed?.Invoke(error);
-        }
+        draftBoardController.SubmitCharacter(data.Id);
+    }
+
+    /// <summary>서버가 밴/픽 요청을 거부했을 때(차례 아님, 이미 사용됨 등) 비동기로 전달됨.</summary>
+    private void HandleDraftActionRejected(string reason)
+    {
+        Debug.LogWarning($"[{nameof(CharacterListPanelController)}] 밴/픽 거부: {reason}");
+        OnDraftSubmitFailed?.Invoke(reason);
     }
 
     /// <summary>

@@ -1,118 +1,172 @@
 using System;
+using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 선공 선택픽(6) / 선공 밴픽(5) / 후공 밴픽(5) / 후공 선택픽(6)
-/// 4개의 PickSlotBar를 DraftFormatSO 값으로 초기화하고,
-/// RuleManager(순수 C# 로직)가 발생시키는 이벤트를 구독해서
-/// "누가 어떤 캐릭터를 밴/픽했는지"를 해당 PickSlotBar에 그대로 반영한다.
+/// 선공 픽바 / 선공 밴바 / 후공 밴바 / 후공 픽바, 4개의 PickSlotBar를
+/// DraftSessionServer가 동기화하는 상태(Format/ActionLog/CurrentSide/State)만 구독해서
+/// 화면에 반영하는 순수 View.
 ///
-/// 이 클래스는 뷰(View) 역할만 한다:
-/// - 캐릭터 선택 자체(누가 클릭했는지 등)는 CharacterListPanelController 같은
-///   곳에서 처리한 뒤 SubmitCharacter(characterId)만 호출해주면 됨.
-/// - "지금 누구 차례인가", "이 캐릭터를 골라도 되는가" 같은 규칙 판단은
-///   전부 RuleManager에 위임하고, 이 클래스는 결과를 화면에 그리기만 한다.
+/// - RuleManager를 직접 만들거나 참조하지 않는다 (서버 전용).
+/// - "지금 누구 차례인가", "이 캐릭터를 골라도 되는가" 판단은 전부 서버(RuleManager)가 하고,
+///   이 클래스는 SubmitCharacter로 요청만 보낸 뒤 결과(ActionLog 추가 / OnActionRejected)를
+///   수동적으로 반영한다. 요청이 성공했는지 실패했는지는 즉시 알 수 없다 - 네트워크 특성상
+///   서버 왕복 후에야 반영되므로, 예전처럼 SubmitCharacter가 bool을 즉시 반환하지 않는다.
+/// - ActionLog는 NetworkList라 스폰/바인딩 시점에 이미 쌓여있는 기록까지 자동으로 동기화되므로
+///   드래프트 도중 접속한 클라이언트(late-join)도 ReplayExistingActions()로 상태를 그대로 복원한다.
+///
+/// 참고: 지금은 라운드 구분 없이 한 줄 바에 전부 이어붙이는 방식이다.
+/// 라운드별로 바를 나누거나 탭으로 구분하는 건 별도 UI 작업이 필요하다.
 /// </summary>
 public class DraftBoardController : MonoBehaviour
 {
-    [Header("Format")]
-    [SerializeField] private DraftFormatSO format;
+    [Header("Session")]
+    [Tooltip("같은 씬에 미리 배치된 DraftSessionServer를 할당하면 Start()에서 자동 바인딩된다. " +
+             "씬 전환으로 세션 오브젝트가 나중에 스폰되는 구조라면 Bind()를 직접 호출할 것.")]
+    [SerializeField] private DraftSessionServer session;
 
     [Header("Bars")]
-    [SerializeField] private PickSlotBar firstPickBar;   // 선공 선택픽 1x6
-    [SerializeField] private PickSlotBar firstBanBar;    // 선공 밴픽   1x5
-    [SerializeField] private PickSlotBar secondBanBar;   // 후공 밴픽   1x5
-    [SerializeField] private PickSlotBar secondPickBar;  // 후공 선택픽 1x6
+    [SerializeField] private PickSlotBar firstPickBar;   // 선공 선택픽 (전체 라운드 합산)
+    [SerializeField] private PickSlotBar firstBanBar;    // 선공 밴픽   (전체 라운드 합산)
+    [SerializeField] private PickSlotBar secondBanBar;   // 후공 밴픽   (전체 라운드 합산)
+    [SerializeField] private PickSlotBar secondPickBar;  // 후공 선택픽 (전체 라운드 합산)
 
-    private RuleManager ruleManager;
+    private readonly Dictionary<(DraftSide side, DraftResultType type), int> barCursor = new();
+    private readonly HashSet<string> usedCharacterIds = new(); // 서버 ActionLog를 미러링한 UX 캐시 (진실은 서버)
+
+    // NetworkVariable.OnValueChanged는 "값이 실제로 바뀔 때만" 발화한다.
+    // 예를 들어 첫 페이즈의 시작 진영이 CurrentSide의 기본값(First)과 같거나,
+    // 마지막에 한 진영이 연속으로 턴을 갖는 경우 값이 안 바뀌어 이벤트가 안 올 수 있다.
+    // 그래서 CurrentSide.OnValueChanged에 의존하지 않고, ActionLog 반영/상태 전이 시점에
+    // 직접 캐시와 비교해서 OnPhaseChanged/OnTurnChanged를 발행한다.
+    private string lastAnnouncedPhaseName;
 
     // ==================== 외부 구독용 이벤트 ====================
-    // 턴 표시 UI("선공 밴 차례입니다" 등)나 연출 트리거가 필요하면
-    // RuleManager를 직접 참조하지 않고 이 이벤트들만 구독하면 됨.
+    // DraftTurnIndicator 등은 세션/네트워크 타입을 몰라도 되도록 이 이벤트들만 구독하면 됨.
     public event Action<DraftSide> OnTurnChanged;
     public event Action<string> OnPhaseChanged;          // "Ban" / "Pick"
     public event Action<DraftSide, string, DraftResultType> OnActionSubmitted;
     public event Action OnDraftCompleted;
 
-    public bool IsDraftComplete => ruleManager != null && ruleManager.IsDraftComplete;
-    public DraftSide? CurrentSide => ruleManager?.CurrentPhase?.CurrentSide;
-    public string CurrentPhaseName => ruleManager?.CurrentPhase?.PhaseName;
+    /// <summary>SubmitCharacter 요청이 서버에서 거부됐을 때(차례 아님, 이미 사용됨 등) 사유 전달.</summary>
+    public event Action<string> OnActionRejected;
 
-    private void Awake()
-    {
-        if (!format)
-        {
-            Debug.LogError($"[{nameof(DraftBoardController)}] DraftFormatSO가 할당되지 않았습니다.");
-            return;
-        }
-
-        // firstPickBar.ApplyConfig(PickSlotBarConfig.Of(format.FirstPickSlots));
-        // firstBanBar.ApplyConfig(PickSlotBarConfig.Of(format.FirstBanSlots));
-        // secondBanBar.ApplyConfig(PickSlotBarConfig.Of(format.SecondBanSlots));
-        // secondPickBar.ApplyConfig(PickSlotBarConfig.Of(format.SecondPickSlots));
-
-        ruleManager = new RuleManager(format);
-        ruleManager.OnActionSubmitted += HandleActionSubmitted;
-        ruleManager.OnPhaseChanged += HandlePhaseChanged;
-        ruleManager.OnDraftCompleted += HandleDraftCompleted;
-    }
+    public bool IsDraftComplete => session != null && session.State.Value == DraftSessionState.Completed;
+    public DraftSide? CurrentSide => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentSide.Value : null;
+    public string CurrentPhaseName => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentPhaseName.Value.ToString() : null;
 
     private void Start()
     {
-        StartDraft();
+        if (session != null) Bind(session);
     }
 
-    private void OnDestroy()
+    private void OnDestroy() => Unbind();
+
+    // ==================== 바인딩 ====================
+
+    public void Bind(DraftSessionServer newSession)
     {
-        if (ruleManager == null) return;
-        ruleManager.OnActionSubmitted -= HandleActionSubmitted;
-        ruleManager.OnPhaseChanged -= HandlePhaseChanged;
-        ruleManager.OnDraftCompleted -= HandleDraftCompleted;
+        if (newSession == null)
+        {
+            Debug.LogError($"[{nameof(DraftBoardController)}] Bind에 null 세션이 전달되었습니다.");
+            return;
+        }
+
+        if (session != null) Unbind();
+        session = newSession;
+
+        session.Format.OnListChanged += HandleFormatChanged;
+        session.ActionLog.OnListChanged += HandleActionLogChanged;
+        session.State.OnValueChanged += HandleStateChanged;
+        session.OnActionRejected += HandleActionRejected;
+
+        if (session.Format.Count > 0) RebuildBars();
+        ReplayExistingActions();
+    }
+
+    public void Unbind()
+    {
+        if (session == null) return;
+
+        session.Format.OnListChanged -= HandleFormatChanged;
+        session.ActionLog.OnListChanged -= HandleActionLogChanged;
+        session.State.OnValueChanged -= HandleStateChanged;
+        session.OnActionRejected -= HandleActionRejected;
+
+        session = null;
+        lastAnnouncedPhaseName = null;
     }
 
     // ==================== 진행 API ====================
 
-    /// <summary>드래프트를 (재)시작한다. 보드도 함께 초기화된다.</summary>
-    public void StartDraft()
-    {
-        ResetBoard();
-        ruleManager.StartDraft();
-    }
-
     /// <summary>
-    /// 현재 차례인 진영이 characterId를 밴/픽한다.
-    /// 차례가 아니거나 이미 사용된 캐릭터면 false와 함께 사유가 error로 반환된다.
-    /// 캐릭터 선택 UI(리스트 클릭 등)는 이 메서드 하나만 호출하면 된다.
+    /// characterId를 밴/픽 요청으로 서버에 제출한다.
+    /// 결과(성공: ActionLog 반영 / 실패: OnActionRejected)는 비동기로 온다 -
+    /// 예전처럼 이 호출 시점에 성공 여부를 알 수 없다는 점에 주의.
     /// </summary>
-    public bool SubmitCharacter(string characterId, out string error)
+    public void SubmitCharacter(string characterId)
     {
-        error = null;
-
-        if (ruleManager == null || ruleManager.CurrentPhase == null)
+        if (session == null)
         {
-            error = "드래프트가 초기화되지 않았습니다.";
-            return false;
+            Debug.LogWarning($"[{nameof(DraftBoardController)}] 세션이 바인딩되지 않아 요청을 보낼 수 없습니다.");
+            return;
         }
 
-        var side = ruleManager.CurrentPhase.CurrentSide;
-        return ruleManager.SubmitAction(side, characterId, out error);
+        session.SubmitActionServerRpc(characterId);
     }
 
     /// <summary>이미 밴/픽되어 더 이상 선택할 수 없는 캐릭터인지 (리스트 버튼 비활성화 등에 사용)</summary>
-    public bool IsCharacterAvailable(string characterId) =>
-        ruleManager != null && ruleManager.IsCharacterAvailable(characterId);
+    public bool IsCharacterAvailable(string characterId) => !usedCharacterIds.Contains(characterId);
 
-    public void ResetBoard()
+    private void ClearBoardLocal()
     {
         firstPickBar.ClearAll();
         firstBanBar.ClearAll();
         secondBanBar.ClearAll();
         secondPickBar.ClearAll();
+        barCursor.Clear();
+        usedCharacterIds.Clear();
     }
 
-    // ==================== RuleManager 이벤트 핸들러 ====================
+    // ==================== 세션 이벤트 핸들러 ====================
 
-    private void HandleActionSubmitted(DraftSide side, string characterId, DraftResultType type)
+    private void HandleFormatChanged(NetworkListEvent<NetworkDraftRoundConfig> _) => RebuildBars();
+
+    private void RebuildBars()
+    {
+        var format = session.Format.ToDraftFormatData();
+
+        firstPickBar.ApplyConfig(PickSlotBarConfig.Of(SumSlots(format, DraftSide.First, DraftResultType.Pick)));
+        firstBanBar.ApplyConfig(PickSlotBarConfig.Of(SumSlots(format, DraftSide.First, DraftResultType.Ban)));
+        secondBanBar.ApplyConfig(PickSlotBarConfig.Of(SumSlots(format, DraftSide.Second, DraftResultType.Ban)));
+        secondPickBar.ApplyConfig(PickSlotBarConfig.Of(SumSlots(format, DraftSide.Second, DraftResultType.Pick)));
+    }
+
+    /// <summary>바인딩 시점에 이미 ActionLog에 쌓여있는 기록을 그대로 재생 (late-join 대응).</summary>
+    private void ReplayExistingActions()
+    {
+        ClearBoardLocal();
+        lastAnnouncedPhaseName = null;
+
+        foreach (var action in session.ActionLog)
+            ApplyAction(action.side, action.characterId.ToString(), action.resultType, notify: false);
+
+        // 과거 기록은 조용히 반영만 하고, "지금 상태"는 마지막에 한 번만 알려준다.
+        AnnounceCurrentTurnIfInProgress();
+    }
+
+    private void HandleActionLogChanged(NetworkListEvent<NetworkDraftAction> change)
+    {
+        // 이 컨트롤러는 항상 처음부터 구독해서 Add 이벤트만 순서대로 받는다고 가정한다.
+        // (재바인딩 시엔 ReplayExistingActions가 전체를 이미 처리하므로 여기선 Add만 다룸)
+        if (change.Type != NetworkListEvent<NetworkDraftAction>.EventType.Add) return;
+
+        var action = change.Value;
+        ApplyAction(action.side, action.characterId.ToString(), action.resultType, notify: true);
+    }
+
+    private void ApplyAction(DraftSide side, string characterId, DraftResultType type, bool notify)
     {
         var bar = ResolveBar(side, type);
         if (!bar)
@@ -121,33 +175,57 @@ public class DraftBoardController : MonoBehaviour
             return;
         }
 
-        // 이벤트는 phase 진행(다음 페이즈 전환) 직전에 발생하므로,
-        // 지금 막 선택이 반영된 슬롯 개수(count-1)가 곧 이번에 채울 인덱스다.
-        var phase = ruleManager.CurrentPhase;
-        int index = phase.GetSelections(side).Count - 1;
+        var key = (side, type);
+        int index = barCursor.TryGetValue(key, out var cursor) ? cursor : 0;
         bar.SetCharacter(index, characterId);
+        barCursor[key] = index + 1;
+        usedCharacterIds.Add(characterId);
+
+        if (!notify) return;
 
         OnActionSubmitted?.Invoke(side, characterId, type);
+        AnnounceCurrentTurnIfInProgress();
+    }
 
-        // 같은 페이즈 안에서 다음 차례로 넘어간 경우(예: 선공밴 -> 후공밴)는
-        // RuleManager.OnPhaseChanged가 따로 발행되지 않으므로 여기서 턴 변경을 알려준다.
-        // 페이즈 자체가 끝난 경우엔 뒤이어 HandlePhaseChanged(또는 HandleDraftCompleted)가 처리하므로 생략.
-        if (!phase.IsComplete)
+    /// <summary>
+    /// 서버가 동기화한 현재 페이즈명/진영을 기준으로, 필요할 때만 OnPhaseChanged를 (캐시와 다를 때)
+    /// 그리고 항상 OnTurnChanged를 발행한다. NetworkVariable.OnValueChanged 대신 이 경로로
+    /// 직접 비교하는 이유는 클래스 상단 주석 참고.
+    /// </summary>
+    private void AnnounceCurrentTurnIfInProgress()
+    {
+        if (session.State.Value != DraftSessionState.InProgress) return;
+
+        string phaseName = session.CurrentPhaseName.Value.ToString();
+        if (phaseName != lastAnnouncedPhaseName)
         {
-            OnTurnChanged?.Invoke(phase.CurrentSide);
+            lastAnnouncedPhaseName = phaseName;
+            OnPhaseChanged?.Invoke(phaseName);
+        }
+
+        OnTurnChanged?.Invoke(session.CurrentSide.Value);
+    }
+
+    private void HandleStateChanged(DraftSessionState previous, DraftSessionState current)
+    {
+        if (current == DraftSessionState.Lobby)
+        {
+            ClearBoardLocal();
+            lastAnnouncedPhaseName = null;
+        }
+        else if (current == DraftSessionState.InProgress)
+        {
+            // HostStartDraft()가 첫 페이즈까지 동기 진행시키므로, State가 InProgress로 바뀐
+            // 이 시점엔 CurrentPhaseName/CurrentSide가 이미 첫 페이즈 값으로 세팅돼 있다.
+            AnnounceCurrentTurnIfInProgress();
+        }
+        else if (current == DraftSessionState.Completed)
+        {
+            OnDraftCompleted?.Invoke();
         }
     }
 
-    private void HandlePhaseChanged(IDraftPhase phase)
-    {
-        OnPhaseChanged?.Invoke(phase.PhaseName);
-        OnTurnChanged?.Invoke(phase.CurrentSide);
-    }
-
-    private void HandleDraftCompleted()
-    {
-        OnDraftCompleted?.Invoke();
-    }
+    private void HandleActionRejected(string reason) => OnActionRejected?.Invoke(reason);
 
     private PickSlotBar ResolveBar(DraftSide side, DraftResultType type)
     {
@@ -159,5 +237,23 @@ public class DraftBoardController : MonoBehaviour
             (DraftSide.Second, DraftResultType.Pick) => secondPickBar,
             _ => null
         };
+    }
+
+    /// <summary>모든 라운드를 통틀어 해당 (진영, 밴/픽) 슬롯 수 총합을 구한다.</summary>
+    private static int SumSlots(IDraftFormat format, DraftSide side, DraftResultType type)
+    {
+        int total = 0;
+        foreach (var round in format.Rounds)
+        {
+            total += (side, type) switch
+            {
+                (DraftSide.First, DraftResultType.Ban) => round.FirstBanSlots,
+                (DraftSide.First, DraftResultType.Pick) => round.FirstPickSlots,
+                (DraftSide.Second, DraftResultType.Ban) => round.SecondBanSlots,
+                (DraftSide.Second, DraftResultType.Pick) => round.SecondPickSlots,
+                _ => 0
+            };
+        }
+        return total;
     }
 }
