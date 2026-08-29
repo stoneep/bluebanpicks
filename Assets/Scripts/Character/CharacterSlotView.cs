@@ -67,7 +67,7 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         // 3. 버튼 연결 해제
         if (button) button.onClick.RemoveAllListeners();
         
-        gameObject.SetActive(false);
+        //gameObject.SetActive(false); -<제어x
     }
 
     // 메인 바인딩 함수

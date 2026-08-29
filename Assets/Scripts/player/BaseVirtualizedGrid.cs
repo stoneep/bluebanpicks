@@ -192,16 +192,16 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
                 bool isVisible = useCullingOffset ?
                     IsSlotVisible(rectTransform) : true;
                 
-                slot.gameObject.SetActive(isVisible);
+                //slot.gameObject.SetActive(isVisible); <-제어권x
                 
-                if (isVisible)
-                {
-                    OnRequestBind?.Invoke(dataIndex, slot);
-                }
+                slotPool.SetVisible(i, isVisible);
+                
+                if (isVisible) OnRequestBind?.Invoke(dataIndex, slot);
             }
             else
             {
-                slot.gameObject.SetActive(false);
+                //slot.gameObject.SetActive(false); <-제어권x
+                slotPool.SetVisible(i, false);
             }
         }
     }

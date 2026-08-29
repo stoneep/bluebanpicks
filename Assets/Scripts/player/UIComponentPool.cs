@@ -44,13 +44,26 @@ namespace Common.Pooling
 
         public void Ensure(int count, Action<T> onCreated = null)
         {
-            if (count < 0) count = 0;
-
+            // if (count < 0) count = 0;
+            //
+            // while (items.Count < count)
+            // {
+            //     var inst = UnityEngine.Object.Instantiate(prefab, parent);
+            //     ApplyRectDefaults(inst);
+            //     SafeReturn(inst);
+            //     items.Add(inst);
+            //     onCreated?.Invoke(inst);
+            // } --> 생성직후 숨겨버리는코드
+            
             while (items.Count < count)
             {
                 var inst = UnityEngine.Object.Instantiate(prefab, parent);
                 ApplyRectDefaults(inst);
-                SafeReturn(inst);
+
+                // SafeReturn(inst) 대신: 시각 정리는 하되 SetActive는 건드리지 않음
+                if (inst is IUIReusable reusable) reusable.OnReturn();
+                inst.gameObject.SetActive(true);   // ← 처음부터 열어둠
+
                 items.Add(inst);
                 onCreated?.Invoke(inst);
             }
@@ -65,9 +78,10 @@ namespace Common.Pooling
             if (!item.gameObject.activeSelf)
                 item.gameObject.SetActive(true);
 
-            if (item is IUIReusable reusable)
-                reusable.OnRent();
-
+            SetVisible(index, true);
+            
+            if (item is IUIReusable reusable) reusable.OnRent();
+            
             return item;
         }
 
@@ -91,9 +105,12 @@ namespace Common.Pooling
 
             if (item is IUIReusable reusable)
                 reusable.OnReturn();
-
-            if (item.gameObject.activeSelf)
-                item.gameObject.SetActive(false);
+            
+            int idx = items.IndexOf(item);
+            if (idx >= 0) SetVisible(idx, false);
+            
+            // if (item.gameObject.activeSelf)
+            //     item.gameObject.SetActive(false);
         }
 
         private void ApplyRectDefaults(T item)
@@ -122,6 +139,16 @@ namespace Common.Pooling
                 
                 rt.sizeDelta = newSize;
             }
+        }
+        
+        public void SetVisible(int index, bool visible)
+        {
+            if (index < 0 || index >= items.Count) return;
+            var item = items[index];
+            if (!item) return;
+
+            if (item.gameObject.activeSelf == visible) return;
+            item.gameObject.SetActive(visible);
         }
     }
 }
