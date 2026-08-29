@@ -60,7 +60,17 @@ public class DraftBoardController : MonoBehaviour
     /// SubmitCharacter를 부르기 전에 이걸로 먼저 걸러내면, 진행 중이 아닌 화면에서 클릭했을 때
     /// 불필요한 서버 왕복과 혼란스러운 OnActionRejected를 피할 수 있다.
     /// </summary>
-    public bool IsSessionActive => session != null && session.State.Value == DraftSessionState.InProgress;
+    public bool IsSessionActive
+    {
+        get
+        {
+            bool result = session != null && session.State.Value == DraftSessionState.InProgress;
+            Debug.Log($"[{nameof(DraftBoardController)}] (IsServer={session?.IsServer}, IsClient={session?.IsClient}, " +
+                      $"LocalClientId={NetworkManager.Singleton?.LocalClientId}) IsSessionActive={result} " +
+                      $"(session={(session ? session.GetEntityId().ToString() : "null")}, State={(session != null ? session.State.Value.ToString() : "N/A")}) @ frame {Time.frameCount}");
+            return result;
+        }
+    }
     public DraftSide? CurrentSide => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentSide.Value : null;
     public string CurrentPhaseName => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentPhaseName.Value.ToString() : null;
 
@@ -97,7 +107,9 @@ public class DraftBoardController : MonoBehaviour
             Debug.LogError($"[{nameof(DraftBoardController)}] Bind에 null 세션이 전달되었습니다.");
             return;
         }
-
+        Debug.Log($"[{nameof(DraftBoardController)}] Bind() session={newSession.GetEntityId()}, " +
+                  $"scene={newSession.gameObject.scene.name}, " +
+                  $"same as Instance? {ReferenceEquals(newSession, DraftSessionServer.Instance)}");
         DraftSessionServer.OnSessionReady -= Bind; // Start()의 안전망 구독이었다면 여기서 정리
 
         if (session != null) Unbind();
@@ -244,6 +256,8 @@ public class DraftBoardController : MonoBehaviour
 
     private void HandleStateChanged(DraftSessionState previous, DraftSessionState current)
     {
+        Debug.Log($"[{nameof(DraftBoardController)}] State changed: {previous} -> {current} @ frame {Time.frameCount}");
+        
         if (current == DraftSessionState.Lobby)
         {
             ClearBoardLocal();

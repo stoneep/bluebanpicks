@@ -33,6 +33,8 @@ public class DraftSessionBootstrap : MonoBehaviour
 
     private void OnEnable()
     {
+        Debug.Log($"[{nameof(DraftSessionBootstrap)}] OnEnable, this={GetEntityId()} @ frame {Time.frameCount}");
+        Debug.Log($"[{nameof(DraftSessionBootstrap)}] HandleServerStarted called, this={GetEntityId()} @ frame {Time.frameCount}", this);
         networkManager.OnServerStarted += HandleServerStarted;
         networkManager.OnServerStopped += HandleServerStopped;
     }
@@ -49,6 +51,8 @@ public class DraftSessionBootstrap : MonoBehaviour
     /// </summary>
     private void HandleServerStarted()
     {
+        Debug.Log($"[{nameof(DraftSessionBootstrap)}] HandleServerStarted called, " +
+                  $"this={GetEntityId()} @ frame {Time.frameCount}");
         if (!networkManager.IsServer) return;
         SpawnSession();
     }

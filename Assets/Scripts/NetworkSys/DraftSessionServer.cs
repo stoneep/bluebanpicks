@@ -66,11 +66,15 @@ public class DraftSessionServer : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         Instance = this;
+        Debug.Log($"[{nameof(DraftSessionServer)}] OnNetworkSpawn (session={GetEntityId()}, " +
+                  $"scene={gameObject.scene.name}) @ frame {Time.frameCount}");
         OnSessionReady?.Invoke(this);
     }
 
     public override void OnNetworkDespawn()
     {
+        Debug.Log($"[{nameof(DraftSessionServer)}] OnNetworkDespawn (session={GetEntityId()}, " +
+                  $"scene={gameObject.scene.name}) @ frame {Time.frameCount}");
         if (Instance == this) Instance = null;
     }
 
@@ -198,6 +202,9 @@ public class DraftSessionServer : NetworkBehaviour
 
         ActionLog.Clear();
         State.Value = DraftSessionState.InProgress;
+        Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to InProgress " +
+                  $"(session={GetEntityId()}, IsSpawned={NetworkObject.IsSpawned}, " +
+                  $"scene={gameObject.scene.name}) @ frame {Time.frameCount}");
         ruleManager.StartDraft();
     }
 

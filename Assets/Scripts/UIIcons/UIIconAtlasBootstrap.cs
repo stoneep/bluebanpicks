@@ -54,7 +54,7 @@ public static class UIIconAtlasBootstrap
         go.AddComponent<UIIconAtlasService>();
         
         _initialized = true;
-        Debug.Log("[UIIconAtlasBootstrap] UIIconAtlasService 생성 완료");
+//        Debug.Log("[UIIconAtlasBootstrap] UIIconAtlasService 생성 완료");
     }
     
 #if UNITY_EDITOR

@@ -8,7 +8,7 @@ using UnityEngine.UI;
 /// 대기실 화면: 라운드 목록 편집(호스트 전용) + 진영 배정(호스트 전용) + 드래프트 시작.
 /// DraftSessionServer의 Format/State/FirstSideClientId/SecondSideClientId를 그대로 구독해서 그린다.
 ///
-/// 진영 배정은 테스트 편의를 위해 "자동 배정"(접속 순서대로 선공/후공) 버튼 하나로 단순화했다.
+/// 진영 배정은 테스트 편의를 위해 "자동 배정"(랜덤으로 변경 선공/후공) 버튼 하나로 단순화했다.
 /// 실제 매치메이킹/초대 시스템이 붙으면 이 부분만 교체하면 됨.
 ///
 /// 편집 흐름: 라운드 행(DraftRoundRowView)이 편집되면 지금 보이는 모든 행의 값을 다시 모아
@@ -207,7 +207,7 @@ public class DraftLobbyController : MonoBehaviour
         var players = new List<ulong>();
         foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
         {
-            if (id == NetworkManager.ServerClientId) continue; // 호스트=관전자, 배정 대상에서 제외
+            if (id == NetworkManager.ServerClientId) continue;
             players.Add(id);
         }
 
@@ -218,7 +218,14 @@ public class DraftLobbyController : MonoBehaviour
             return;
         }
 
-        // 테스트용 단순 규칙: 접속 순서 그대로 선공/후공.
+        // 50% 확률로 두 참가자의 선공/후공을 뒤바꾼다.
+        // 호스트 로컬에서만 실행되는 코드이므로(버튼 interactable 조건 + HostAssignSides의 IsServer 방어)
+        // 클라이언트가 결과에 개입할 여지가 없다.
+        if (Random.value < 0.5f)
+        {
+            (players[0], players[1]) = (players[1], players[0]);
+        }
+
         session.HostAssignSides(players[0], players[1]);
     }
 

@@ -220,7 +220,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
 
         atlasPreloader.LoadAtlases(keys, () =>
         {
-            Debug.Log("[CharacterListPanel] 아틀라스 프리로드 완료");
+//            Debug.Log("[CharacterListPanel] 아틀라스 프리로드 완료");
         });
     }
 
@@ -246,7 +246,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
             preloadArtProvider.LoadSprite(characters[i].Id, CharacterCut.Slot);
         }
 
-        Debug.Log($"[CharacterListPanel] 초상화 프리로드 요청: {characters.Count}개");
+//        Debug.Log($"[CharacterListPanel] 초상화 프리로드 요청: {characters.Count}개");
     }
 
     private void OnDestroy()

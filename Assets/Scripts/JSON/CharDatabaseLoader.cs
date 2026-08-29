@@ -92,7 +92,7 @@ public static class CharDatabaseLoader
             _baseIdMap[c.Id] = string.IsNullOrEmpty(c.BaseId) ? c.Id : c.BaseId;
         }
 
-        Debug.Log($"[CharDB] 캐시 구축 완료 (Ids: {_cachedIds.Count}, BaseId 매핑: {_baseIdMap.Count})");
+//        Debug.Log($"[CharDB] 캐시 구축 완료 (Ids: {_cachedIds.Count}, BaseId 매핑: {_baseIdMap.Count})");
     }
 
     // ════════════════════════════════════════
