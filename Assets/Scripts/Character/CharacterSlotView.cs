@@ -20,6 +20,11 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
     [Tooltip("드래프트에서 이미 밴/픽되어 선택 불가할 때 오버레이 색")]
     [SerializeField] private Color draftUnavailableOverlayColor = new(0.5f, 0f, 0f, 0.6f);
 
+    [Header("Selection Highlight (밴/픽 확인 대기)")]
+    [Tooltip("클릭해서 밴/픽 후보로 선택됐지만 아직 확인 버튼을 누르기 전 상태의 테두리/하이라이트. " +
+             "비워두면 선택 표시 없이 클릭만 동작함.")]
+    [SerializeField] private GameObject selectionHighlight;
+
     [Header("Refs - Icons")]
     [SerializeField] private Image affiliationIcon;
     [SerializeField] private Image positionIcon;
@@ -66,12 +71,15 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         
         // 3. 버튼 연결 해제
         if (button) button.onClick.RemoveAllListeners();
-        
+
+        // 4. 선택(확인 대기) 하이라이트도 재사용 전에 초기화
+        SetSelected(false);
+
         //gameObject.SetActive(false); -<제어x
     }
 
     // 메인 바인딩 함수
-    public void Bind(int dataIndex, in CharacterViewData data, Action<int> onClick, CharacterArtProvider artProvider, bool isDraftUnavailable = false)
+    public void Bind(int dataIndex, in CharacterViewData data, Action<int> onClick, CharacterArtProvider artProvider, bool isDraftUnavailable = false, bool isSelected = false)
     {
         _boundIndex = dataIndex;
         _onClickIndex = onClick;
@@ -80,6 +88,7 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         SetNameAndStats(data);
         UpdateRarityStars(data.Rarity);
         ApplyLockOverlay(data.IsLocked, isDraftUnavailable);
+        SetSelected(isSelected);
 
         // 2. 아이콘 로딩 (로더에게 위임)
         LoadIcons(data);
@@ -101,6 +110,15 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
     /// 보통은 CharacterGridViewAdapter가 Bind() 시점에 isDraftUnavailable을 같이 넘겨준다.
     /// </summary>
     public void SetDraftUnavailable(bool isDraftUnavailable) => ApplyLockOverlay(_lastIsLocked, isDraftUnavailable);
+
+    /// <summary>
+    /// 밴/픽 후보로 클릭됐지만 아직 확인 버튼을 누르기 전인지 표시.
+    /// (실제 밴/픽 제출은 확인 버튼에서 이루어지므로, 이건 순수 시각적 표시일 뿐이다)
+    /// </summary>
+    public void SetSelected(bool isSelected)
+    {
+        if (selectionHighlight) selectionHighlight.SetActive(isSelected);
+    }
 
     private bool _lastIsLocked;
 
@@ -241,5 +259,6 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         if (defenseTypeIcon) { defenseTypeIcon.sprite = null; defenseTypeIcon.enabled = false; }
         if (attackTypeBg) attackTypeBg.gameObject.SetActive(false);
         if (defenseTypeBg) defenseTypeBg.gameObject.SetActive(false);
+        SetSelected(false);
     }
 }

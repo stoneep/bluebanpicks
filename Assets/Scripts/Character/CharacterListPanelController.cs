@@ -18,14 +18,22 @@ public sealed class CharacterListPanelController : MonoBehaviour
     [SerializeField] private Button openPopupBtn;
 
     [Header("Draft")]
-    [Tooltip("할당하면 리스트 클릭이 곧바로 밴/픽 제출로 연결됨. 밴픽 화면이 아니면 비워둘 것.")]
+    [Tooltip("할당하면 리스트 클릭이 밴/픽 '선택'으로 연결됨(제출은 확인 버튼에서). 밴픽 화면이 아니면 비워둘 것.")]
     [SerializeField] private DraftBoardController draftBoardController;
+    [Tooltip("선택된 캐릭터의 밴/픽을 확정 제출하는 버튼. draftBoardController가 할당된 화면에서만 사용됨.")]
+    [SerializeField] private Button confirmActionButton;
 
     private FilterEngine<CharacterViewData> engine;
     private readonly CharacterFilterState state = new();
     private readonly CharacterFilterRules rules = new();
     
     private readonly List<CharacterViewData> allData = new();
+
+    /// <summary>
+    /// 리스트에서 클릭해 밴/픽 후보로 "선택"됐지만 아직 확인 버튼을 누르기 전인 캐릭터.
+    /// 클릭만으로는 서버에 아무 요청도 가지 않는다 - 실제 제출은 확인 버튼(OnClickConfirmAction)에서만 발생.
+    /// </summary>
+    private string pendingCharacterId;
 
     // ★ 프리로드용
     private readonly AtlasPreloader atlasPreloader = new();
@@ -43,6 +51,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
         
         if (openPopupBtn) openPopupBtn.onClick.AddListener(OpenFilterPopup);
         if (filterPopup) filterPopup.OnApply += HandlePopupApply;
+        if (confirmActionButton) confirmActionButton.onClick.AddListener(OnClickConfirmAction);
 
         // ★ 아틀라스 프리로드 (학원, 공통 아이콘 등)
         PreloadAtlases();
@@ -78,7 +87,10 @@ public sealed class CharacterListPanelController : MonoBehaviour
             draftBoardController.OnActionSubmitted += HandleDraftActionSubmitted;
             draftBoardController.OnActionRejected += HandleDraftActionRejected;
         }
-        
+
+        // 화면이 꺼졌다 켜지는 사이에 상태가 바뀌었을 수 있으니 선택 대기 상태를 깨끗하게 초기화
+        ClearPendingSelection();
+
         RefreshView();
     }
 
@@ -160,12 +172,9 @@ public sealed class CharacterListPanelController : MonoBehaviour
 
     /// <summary>
     /// 리스트에서 캐릭터를 클릭했을 때. draftBoardController가 할당돼 있으면
-    /// 곧바로 SubmitCharacter로 요청을 보낸다 - "지금 누구 차례인가" 같은 판단은
-    /// 전부 서버(RuleManager) 쪽 책임이다.
-    ///
-    /// 서버 왕복이 필요해서 이 시점엔 성공/실패를 알 수 없다:
-    ///  - 성공하면 ActionLog 동기화로 HandleDraftActionSubmitted가 나중에 불린다.
-    ///  - 실패하면 HandleDraftActionRejected가 비동기로 사유와 함께 불린다.
+    /// 곧바로 제출하지 않고 "확인 대기" 상태로 선택만 표시한다.
+    /// 실제 밴/픽 제출은 확인 버튼(OnClickConfirmAction)을 눌러야 이루어진다.
+    /// 같은 캐릭터를 다시 클릭하면 선택이 취소된다.
     /// </summary>
     private void HandleCharacterPicked(CharacterViewData data)
     {
@@ -180,7 +189,54 @@ public sealed class CharacterListPanelController : MonoBehaviour
             return;
         }
 
-        draftBoardController.SubmitCharacter(data.Id);
+        if (!draftBoardController.IsCharacterAvailable(data.Id))
+        {
+            // 이미 밴/픽되어 더 이상 고를 수 없는 캐릭터 - 선택 자체를 허용하지 않는다.
+            return;
+        }
+
+        if (pendingCharacterId == data.Id)
+        {
+            // 같은 캐릭터를 다시 클릭 → 선택 취소
+            ClearPendingSelection();
+            return;
+        }
+
+        pendingCharacterId = data.Id;
+        if (view) view.SetSelectedCharacter(pendingCharacterId);
+        UpdateConfirmButtonInteractable();
+    }
+
+    /// <summary>
+    /// 확인 버튼 클릭 시 - 여기서 비로소 서버에 밴/픽 요청을 보낸다.
+    /// "지금 누구 차례인가" 같은 판단은 여전히 전부 서버(RuleManager) 쪽 책임이다.
+    ///
+    /// 서버 왕복이 필요해서 이 시점엔 성공/실패를 알 수 없다:
+    ///  - 성공하면 ActionLog 동기화로 HandleDraftActionSubmitted가 나중에 불린다.
+    ///  - 실패하면 HandleDraftActionRejected가 비동기로 사유와 함께 불린다.
+    /// 결과를 기다리지 않고 선택 상태는 즉시 비운다(낙관적 초기화) - 예전부터 이 컨트롤러가
+    /// 성공/실패를 즉시 알 수 없다는 전제로 설계돼 있었던 것과 동일한 방식이다.
+    /// </summary>
+    private void OnClickConfirmAction()
+    {
+        if (!draftBoardController || string.IsNullOrEmpty(pendingCharacterId)) return;
+
+        draftBoardController.SubmitCharacter(pendingCharacterId);
+        ClearPendingSelection();
+    }
+
+    /// <summary>선택(확인 대기) 상태를 비우고 하이라이트/버튼도 함께 갱신.</summary>
+    private void ClearPendingSelection()
+    {
+        pendingCharacterId = null;
+        if (view) view.SetSelectedCharacter(null);
+        UpdateConfirmButtonInteractable();
+    }
+
+    /// <summary>선택된 캐릭터가 있을 때만 확인 버튼을 누를 수 있도록.</summary>
+    private void UpdateConfirmButtonInteractable()
+    {
+        if (confirmActionButton) confirmActionButton.interactable = !string.IsNullOrEmpty(pendingCharacterId);
     }
 
     /// <summary>서버가 밴/픽 요청을 거부했을 때(차례 아님, 이미 사용됨 등) 비동기로 전달됨.</summary>
@@ -195,9 +251,12 @@ public sealed class CharacterListPanelController : MonoBehaviour
     /// "선택 가능 여부"가 바뀌므로, 화면에 보이는 슬롯들을 다시 바인딩해서
     /// 락 오버레이(빨간색: 밴/픽됨)를 최신 상태로 반영한다.
     /// 스크롤 위치를 유지해야 하므로 jumpToTop: false로 새로고침.
+    /// 만약 방금 처리된 캐릭터가 아직 확인 대기 중이던(다른 클라이언트가 먼저 가져간) 캐릭터라면
+    /// 선택 상태도 함께 정리한다.
     /// </summary>
     private void HandleDraftActionSubmitted(DraftSide side, string characterId, DraftResultType type)
     {
+        if (pendingCharacterId == characterId) ClearPendingSelection();
         RefreshView(jumpToTop: false);
     }
 
@@ -220,7 +279,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
 
         atlasPreloader.LoadAtlases(keys, () =>
         {
-//            Debug.Log("[CharacterListPanel] 아틀라스 프리로드 완료");
+            Debug.Log("[CharacterListPanel] 아틀라스 프리로드 완료");
         });
     }
 
@@ -246,7 +305,7 @@ public sealed class CharacterListPanelController : MonoBehaviour
             preloadArtProvider.LoadSprite(characters[i].Id, CharacterCut.Slot);
         }
 
-//        Debug.Log($"[CharacterListPanel] 초상화 프리로드 요청: {characters.Count}개");
+        Debug.Log($"[CharacterListPanel] 초상화 프리로드 요청: {characters.Count}개");
     }
 
     private void OnDestroy()

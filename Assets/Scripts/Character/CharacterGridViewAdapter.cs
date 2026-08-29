@@ -18,6 +18,10 @@ public sealed class CharacterGridViewAdapter : MonoBehaviour, IFilteredListView<
     // 미할당이면 항상 선택 가능한 것으로 간주 (기존 동작 그대로 유지).
     private Func<string, bool> availabilityPredicate;
 
+    // ★ 추가: 확인 버튼을 누르기 전, 클릭으로 "선택"만 된 캐릭터 id (밴/픽 확정 아님).
+    // null/빈 문자열이면 선택된 캐릭터 없음.
+    private string selectedCharacterId;
+
     private void Awake()
     {
         artProvider = new CharacterArtProvider();
@@ -39,13 +43,24 @@ public sealed class CharacterGridViewAdapter : MonoBehaviour, IFilteredListView<
     /// </summary>
     public void SetAvailabilityPredicate(Func<string, bool> predicate) => availabilityPredicate = predicate;
 
+    /// <summary>
+    /// 밴/픽 확인 대기 중인 캐릭터를 지정(하이라이트 표시)한다. null/빈 문자열이면 선택 해제.
+    /// 실제 밴/픽 제출과는 무관한 순수 UI 상태 - 제출은 확인 버튼에서 별도로 이루어진다.
+    /// </summary>
+    public void SetSelectedCharacter(string characterId)
+    {
+        selectedCharacterId = characterId;
+        Refresh(jumpToTop: false);
+    }
+
     private void BindSlot(int dataIndex, CharacterSlotView slot)
     {
         if (dataIndex < 0 || dataIndex >= currentItems.Count) return;
 
         var data = currentItems[dataIndex];
         bool isDraftUnavailable = availabilityPredicate != null && !availabilityPredicate(data.Id);
-        slot.Bind(dataIndex, data, OnClicked, artProvider, isDraftUnavailable);
+        bool isSelected = !string.IsNullOrEmpty(selectedCharacterId) && selectedCharacterId == data.Id;
+        slot.Bind(dataIndex, data, OnClicked, artProvider, isDraftUnavailable, isSelected);
     }
 
     private void OnClicked(int index)
