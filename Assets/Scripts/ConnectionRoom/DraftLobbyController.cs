@@ -272,6 +272,7 @@ public class DraftLobbyController : MonoBehaviour
         string state = session.State.Value switch
         {
             DraftSessionState.Lobby => "대기실",
+            DraftSessionState.Loading => "잠시 후 시작",
             DraftSessionState.InProgress => "드래프트 진행 중",
             DraftSessionState.Completed => "종료",
             _ => "?"

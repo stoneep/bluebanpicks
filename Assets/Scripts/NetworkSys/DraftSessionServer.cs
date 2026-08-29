@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
@@ -50,6 +51,24 @@ public class DraftSessionServer : NetworkBehaviour
     [Tooltip("드래프트 시작 시 전환할 씬 이름. Build Settings(File > Build Settings > Scenes In Build)에 " +
              "먼저 등록되어 있어야 하고, NetworkManager 인스펙터에서 Enable Scene Management가 켜져 있어야 한다.")]
     [SerializeField] private string draftSceneName = "MainLobby";
+
+    [Header("Timers")]
+    [Tooltip("밴픽씬(MainLobby) 로드가 끝난 직후, 혹시 모를 클라이언트 UI/에셋 로딩 지연을 위해 " +
+             "실제 밴/픽 시작 전에 대기하는 시간(초). 이 시간 동안 State는 Loading이다.")]
+    [SerializeField] private float preDraftLoadBufferSeconds = 15f;
+
+    [Tooltip("밴/픽 각 턴마다 주어지는 제한 시간(초). 시간 안에 선택하지 않으면 서버가 " +
+             "남아있는 캐릭터 중 하나를 자동으로 대신 선택한다. 0 이하로 두면 턴 타이머를 쓰지 않는다.")]
+    [SerializeField] private float turnTimeLimitSeconds = 30f;
+
+    /// <summary>Loading 상태에서 남은 대기 시간(초). Loading이 아닐 때는 0.</summary>
+    public readonly NetworkVariable<float> PreDraftSecondsRemaining = new(0f);
+
+    /// <summary>현재 턴에 남은 제한 시간(초). 턴 타이머가 꺼져있거나 진행 중이 아니면 0.</summary>
+    public readonly NetworkVariable<float> TurnSecondsRemaining = new(0f);
+
+    private Coroutine preDraftCountdownRoutine;
+    private Coroutine turnTimerRoutine;
 
     // ---------- 진행 중 상태 (서버가 갱신, 클라는 읽기만) ----------
 
@@ -188,6 +207,43 @@ public class DraftSessionServer : NetworkBehaviour
                               string.Join(",", clientsTimedOut));
         }
 
+        BeginPreDraftCountdown();
+    }
+
+    /// <summary>
+    /// 밴픽씬 로드가 전원 완료된 시점 ~ 실제 드래프트 시작 사이에 유예 시간을 둔다.
+    /// 씬 전환 자체는 끝났어도 캐릭터 아이콘 로드(Addressables 등) 같은 클라이언트 UI 준비가
+    /// 아직 안 끝났을 수 있어서, "혹시 모를" 여유 시간을 준 뒤 자동으로 밴/픽을 시작시킨다.
+    /// </summary>
+    private void BeginPreDraftCountdown()
+    {
+        State.Value = DraftSessionState.Loading;
+        Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to Loading, " +
+                  $"{preDraftLoadBufferSeconds}초 후 자동으로 드래프트를 시작합니다.");
+
+        if (preDraftCountdownRoutine != null) StopCoroutine(preDraftCountdownRoutine);
+        preDraftCountdownRoutine = StartCoroutine(PreDraftCountdownRoutine());
+    }
+
+    private IEnumerator PreDraftCountdownRoutine()
+    {
+        float remaining = Mathf.Max(0f, preDraftLoadBufferSeconds);
+        PreDraftSecondsRemaining.Value = Mathf.Ceil(remaining);
+
+        while (remaining > 0f)
+        {
+            yield return null;
+            remaining -= Time.deltaTime;
+
+            // NetworkVariable은 값이 실제로 바뀔 때만 트래픽을 보내므로, 프레임마다가 아니라
+            // 초 단위(올림)로만 갱신해서 불필요한 동기화를 줄인다.
+            float rounded = Mathf.Max(0f, Mathf.Ceil(remaining));
+            if (!Mathf.Approximately(rounded, PreDraftSecondsRemaining.Value))
+                PreDraftSecondsRemaining.Value = rounded;
+        }
+
+        PreDraftSecondsRemaining.Value = 0f;
+        preDraftCountdownRoutine = null;
         BeginDraft();
     }
 
@@ -205,7 +261,7 @@ public class DraftSessionServer : NetworkBehaviour
         Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to InProgress " +
                   $"(session={GetEntityId()}, IsSpawned={NetworkObject.IsSpawned}, " +
                   $"scene={gameObject.scene.name}) @ frame {Time.frameCount}");
-        ruleManager.StartDraft();
+        ruleManager.StartDraft(); // 내부에서 OnPhaseChanged가 발행되어 첫 턴 타이머도 자동으로 시작된다.
     }
 
     // ==================== 진행 중: 액션 제출 (모든 클라이언트) ====================
@@ -264,21 +320,121 @@ public class DraftSessionServer : NetworkBehaviour
             characterId = characterId,
             resultType = type
         });
+
+        // 페이즈가 아직 안 끝났다면(=같은 페이즈 안에서 다음 사람 차례로 넘어간 것) 여기서 턴 타이머를
+        // 다시 시작한다. 페이즈가 끝났다면 곧이어 HandleServerPhaseChanged가 호출되므로 거기서 시작한다.
+        if (ruleManager != null && ruleManager.CurrentPhase != null && !ruleManager.CurrentPhase.IsComplete)
+        {
+            RestartTurnTimer();
+        }
     }
 
     private void HandleServerPhaseChanged(IDraftPhase phase)
     {
         CurrentPhaseName.Value = phase.PhaseName;
         CurrentSide.Value = phase.CurrentSide;
+        RestartTurnTimer();
     }
 
     private void HandleServerDraftCompleted()
     {
         State.Value = DraftSessionState.Completed;
+        StopTurnTimer();
+    }
+
+    // ==================== 서버 내부: 밴/픽 턴 제한 시간 ====================
+
+    private void RestartTurnTimer()
+    {
+        if (turnTimerRoutine != null) StopCoroutine(turnTimerRoutine);
+
+        if (turnTimeLimitSeconds <= 0f)
+        {
+            TurnSecondsRemaining.Value = 0f;
+            turnTimerRoutine = null;
+            return;
+        }
+
+        turnTimerRoutine = StartCoroutine(TurnTimerRoutine());
+    }
+
+    private void StopTurnTimer()
+    {
+        if (turnTimerRoutine != null) StopCoroutine(turnTimerRoutine);
+        turnTimerRoutine = null;
+        TurnSecondsRemaining.Value = 0f;
+    }
+
+    private IEnumerator TurnTimerRoutine()
+    {
+        float remaining = turnTimeLimitSeconds;
+        TurnSecondsRemaining.Value = Mathf.Ceil(remaining);
+
+        while (remaining > 0f)
+        {
+            yield return null;
+            remaining -= Time.deltaTime;
+
+            float rounded = Mathf.Max(0f, Mathf.Ceil(remaining));
+            if (!Mathf.Approximately(rounded, TurnSecondsRemaining.Value))
+                TurnSecondsRemaining.Value = rounded;
+        }
+
+        TurnSecondsRemaining.Value = 0f;
+        turnTimerRoutine = null;
+        HandleTurnTimedOut();
+    }
+
+    /// <summary>
+    /// 제한 시간 안에 아무도 선택하지 않았을 때, 서버가 현재 차례인 진영을 대신해
+    /// 아직 사용되지 않은 캐릭터 중 하나를 무작위로 골라 제출한다.
+    /// SubmitAction이 성공하면 RuleManager의 OnActionSubmitted/OnPhaseChanged가 그대로 발행되므로
+    /// ActionLog 반영이나 다음 턴 타이머 시작은 기존 핸들러가 알아서 처리한다.
+    /// </summary>
+    private void HandleTurnTimedOut()
+    {
+        if (ruleManager == null || State.Value != DraftSessionState.InProgress) return;
+
+        var phase = ruleManager.CurrentPhase;
+        if (phase == null || phase.IsComplete) return;
+
+        var side = phase.CurrentSide;
+        var autoPickId = PickRandomAvailableCharacterId();
+
+        if (autoPickId == null)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 턴 시간 초과: 자동으로 선택할 수 있는 캐릭터가 없습니다.");
+            return;
+        }
+
+        if (!ruleManager.SubmitAction(side, autoPickId, out var error))
+        {
+            Debug.LogError($"[{nameof(DraftSessionServer)}] 턴 시간 초과 자동 선택 실패: {error}");
+            return;
+        }
+
+        Debug.Log($"[{nameof(DraftSessionServer)}] 턴 시간 초과 - {side}의 {phase.PhaseName}을(를) 자동으로 대신 선택: {autoPickId}");
+    }
+
+    /// <summary>CharDatabaseLoader에 로드되어 있는 전체 캐릭터 중, 아직 밴/픽되지 않은 것 하나를 무작위로 반환.</summary>
+    private string PickRandomAvailableCharacterId()
+    {
+        var candidates = new List<string>();
+        foreach (var id in CharDatabaseLoader.AllIds)
+        {
+            if (ruleManager.IsCharacterAvailable(id))
+                candidates.Add(id);
+        }
+
+        if (candidates.Count == 0) return null;
+        return candidates[UnityEngine.Random.Range(0, candidates.Count)];
     }
 
     public override void OnDestroy()
     {
+        if (preDraftCountdownRoutine != null) StopCoroutine(preDraftCountdownRoutine);
+        if (turnTimerRoutine != null) StopCoroutine(turnTimerRoutine);
+
         if (ruleManager != null)
         {
             ruleManager.OnActionSubmitted -= HandleServerActionSubmitted;
@@ -294,10 +450,14 @@ public class DraftSessionServer : NetworkBehaviour
     }
 }
 
-/// <summary>대기실(설정 편집) → 진행 중 → 종료, 세션의 큰 흐름.</summary>
+/// <summary>대기실(설정 편집) → 로딩 대기 → 진행 중 → 종료, 세션의 큰 흐름.</summary>
 public enum DraftSessionState
 {
     Lobby,
+
+    /// <summary>밴픽씬 로드 완료 ~ 실제 드래프트 시작 전, UI 로딩 유예 시간(기본 15초) 동안의 상태.</summary>
+    Loading,
+
     InProgress,
     Completed
 }
