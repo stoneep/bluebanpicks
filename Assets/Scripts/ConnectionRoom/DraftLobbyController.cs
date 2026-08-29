@@ -32,6 +32,10 @@ public class DraftLobbyController : MonoBehaviour
     [Header("Status")]
     [SerializeField] private TMP_Text statusText;
 
+    [Header("Room Code")]
+    [SerializeField] private TMP_Text roomCodeText;
+    [SerializeField] private Button copyRoomCodeButton; // 있으면 클립보드 복사
+    
     private DraftSessionServer session;
     private readonly List<DraftRoundRowView> rows = new();
 
@@ -42,6 +46,7 @@ public class DraftLobbyController : MonoBehaviour
         applyLolPresetButton.onClick.AddListener(HandleApplyLolPreset);
         autoAssignSidesButton.onClick.AddListener(HandleAutoAssignSides);
         startDraftButton.onClick.AddListener(HandleStartDraft);
+        copyRoomCodeButton.onClick.AddListener(HandleCopyRoomCode);
     }
 
     private void OnEnable()
@@ -73,6 +78,7 @@ public class DraftLobbyController : MonoBehaviour
         RebuildRows();
         RefreshInteractable();
         RefreshStatus();
+        RefreshRoomCode();
     }
 
     private void Unbind()
@@ -279,7 +285,29 @@ public class DraftLobbyController : MonoBehaviour
 
         SetStatus($"[{state}] {hostRole} / {sides}");
     }
+    
+    private void RefreshRoomCode()
+    {
+        if (roomCodeText == null) return;
 
+        var relay = NetworkManager.Singleton != null
+            ? NetworkManager.Singleton.GetComponent<RelayRoomService>()
+            : null;
+
+        string code = relay != null ? relay.CurrentJoinCode : null;
+        roomCodeText.text = string.IsNullOrEmpty(code) ? string.Empty : $"방 코드: {code}";
+
+        if (copyRoomCodeButton != null)
+            copyRoomCodeButton.gameObject.SetActive(!string.IsNullOrEmpty(code));
+    }
+
+    private void HandleCopyRoomCode()
+    {
+        var relay = NetworkManager.Singleton?.GetComponent<RelayRoomService>();
+        if (relay != null && !string.IsNullOrEmpty(relay.CurrentJoinCode))
+            GUIUtility.systemCopyBuffer = relay.CurrentJoinCode;
+    }
+    
     private void SetStatus(string message)
     {
         if (statusText) statusText.text = message;

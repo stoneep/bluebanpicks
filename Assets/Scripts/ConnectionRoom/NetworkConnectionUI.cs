@@ -88,6 +88,14 @@ public class NetworkConnectionUI : MonoBehaviour
 
     private async void HandleCreateRoom()
     {
+        if (roomAccess != null)
+        {
+            string password = hostPasswordInput != null ? hostPasswordInput.text : string.Empty;
+            roomAccess.HostSetPassword(password);
+            // 호스트 자신도 ConnectionApproval을 거치므로(clientId=0), 서버에 등록한 것과
+            // 동일한 비밀번호를 자기 자신의 ConnectionData(payload)에도 실어야 승인을 통과한다.
+            roomAccess.ClientSetJoinPassword(password);
+        }
         if (relayService == null) return;
 
         SetInteractable(false);
@@ -104,6 +112,9 @@ public class NetworkConnectionUI : MonoBehaviour
         if (roomAccess != null)
         {
             roomAccess.HostSetPassword(hostPasswordInput != null ? hostPasswordInput.text : string.Empty);
+            SetRoomCodeDisplay(joinCode);
+            GUIUtility.systemCopyBuffer = joinCode; // 사라지기 전에 자동으로 클립보드에 복사
+            SetStatus("방 코드가 클립보드에 복사되었습니다.");
         }
 
         networkManager.StartHost();

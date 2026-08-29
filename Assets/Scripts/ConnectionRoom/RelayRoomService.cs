@@ -30,10 +30,11 @@ using UnityEngine;
 public class RelayRoomService : MonoBehaviour
 {
     private const string ConnectionType = "dtls"; // 암호화된 UDP. 특정 플랫폼/네트워크에서 막히면 "udp"로 교체 고려.
-
     private NetworkManager networkManager;
     private UnityTransport transport;
     private bool servicesReady;
+
+    public string CurrentJoinCode { get; private set; } // 씬 전환 후에도 대기실에서 다시 꺼내 보여줄 수 있게 보관
 
     private void Awake()
     {
@@ -93,6 +94,7 @@ public class RelayRoomService : MonoBehaviour
             string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
             transport.SetRelayServerData(RelayUtils.HostRelayData(allocation, ConnectionType));
+            CurrentJoinCode = joinCode;
 
             Debug.Log($"[{nameof(RelayRoomService)}] Relay 방 생성 완료. 방 코드={joinCode}");
             return joinCode;
