@@ -24,10 +24,12 @@ public sealed class FilterPopupController : MonoBehaviour
     [Header("Control Buttons")]
     [SerializeField] private Button confirmButton;
     [SerializeField] private Button resetButton;
+    [SerializeField] private Button cancelButton;
     
     public event Action<CharacterFilterContext> OnApply;
 
     private CharacterFilterContext tempContext;
+    private CharacterFilterContext originalContext; // 취소 시 복원용
 
     private void Awake()
     {
@@ -40,6 +42,7 @@ public sealed class FilterPopupController : MonoBehaviour
 
         if (confirmButton) confirmButton.onClick.AddListener(OnClickConfirm);
         if (resetButton) resetButton.onClick.AddListener(OnClickReset);
+        if (cancelButton) cancelButton.onClick.AddListener(OnClickCancel);
         if (orderToggleBtn) orderToggleBtn.onClick.AddListener(ToggleOrder);
         
     }
@@ -47,6 +50,7 @@ public sealed class FilterPopupController : MonoBehaviour
     public void Open(CharacterFilterContext currentContext)
     {
         tempContext = currentContext;
+        originalContext = currentContext; // 취소 시 되돌아갈 스냅샷
         
         SyncAllVisuals();
         
@@ -100,6 +104,13 @@ public sealed class FilterPopupController : MonoBehaviour
     {
         // 완성된 박스를 배달
         OnApply?.Invoke(tempContext);
+        gameObject.SetActive(false);
+    }
+    
+    public void OnClickCancel()
+    {
+        tempContext = originalContext;
+        SyncAllVisuals();
         gameObject.SetActive(false);
     }
     
