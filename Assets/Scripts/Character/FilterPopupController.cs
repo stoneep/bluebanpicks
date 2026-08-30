@@ -25,6 +25,7 @@ public sealed class FilterPopupController : MonoBehaviour
     [SerializeField] private Button confirmButton;
     [SerializeField] private Button resetButton;
     [SerializeField] private Button cancelButton;
+    [SerializeField] private Button backgroundOverlayButton;
     
     public event Action<CharacterFilterContext> OnApply;
 
@@ -43,6 +44,7 @@ public sealed class FilterPopupController : MonoBehaviour
         if (confirmButton) confirmButton.onClick.AddListener(OnClickConfirm);
         if (resetButton) resetButton.onClick.AddListener(OnClickReset);
         if (cancelButton) cancelButton.onClick.AddListener(OnClickCancel);
+        if (backgroundOverlayButton) backgroundOverlayButton.onClick.AddListener(OnClickCancel);
         if (orderToggleBtn) orderToggleBtn.onClick.AddListener(ToggleOrder);
         
     }

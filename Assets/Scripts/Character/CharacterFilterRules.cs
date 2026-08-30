@@ -20,8 +20,8 @@ public class CharacterFilterRules
 
     // 이름 검색 (영문/한글 표기 + Id 대상, 초성 검색 지원)
     public readonly TextSearchFilterRule<CharacterViewData> Search
-        = new(item => new[] { item.DisplayNameEn, item.DisplayNameKr, item.Id });
-    
+        = new(item => new[] { item.DisplayNameEn, item.DisplayNameKr});
+    //    = new(item => new[] { item.DisplayNameEn, item.DisplayNameKr, item.Id });
     // Context(데이터 박스)를 받아서 모든 규칙에 적용
     public void Apply(CharacterFilterContext context)
     {
