@@ -25,6 +25,27 @@ public abstract class DraftTimerIndicatorBase : MonoBehaviour
     [SerializeField] protected GameObject root;
     [SerializeField] protected TMP_Text timerText;
 
+    /// <summary>
+    /// 세션에 바인딩되기 "전"(Start/Bind가 실행되기 전 첫 프레임 포함) 기본으로 보여야 하는지 여부.
+    ///
+    /// 배경: 씬 전환 직후엔 이 클라이언트의 그리드/캐릭터 리스트가 로컬에서 곧바로 그려지는 반면,
+    /// DraftSessionServer.State는 "전원이 로드를 마쳐야" 서버에서 Loading으로 바뀌고 그게 다시
+    /// 네트워크로 동기화되어 온다. 그 사이 Bind()의 첫 Render()가 실행되면 session.State.Value는
+    /// 아직 이전 값(Lobby)이라 IsActiveState가 false를 반환 → 커튼(Pre)이 "확인되기도 전에" 잠깐
+    /// 열렸다가, 잠시 뒤 State가 Loading으로 동기화되면 다시 닫히는 깜빡임이 생긴다.
+    ///
+    /// 커튼처럼 "확인되기 전까지는 가리고 있어야" 하는 자식(Pre)은 true로 오버라이드해서
+    /// Bind 이전부터 이미 닫혀 있게 하고, 확인되기 전까진 안 보여도 무방한 자식(In/Post)은
+    /// 기본값(false)을 그대로 쓴다.
+    /// </summary>
+    protected virtual bool DefaultVisibleBeforeBind => false;
+
+    protected virtual void Awake()
+    {
+        // Start()/Bind()보다 먼저 실행되어, 바인딩 전 첫 프레임의 상태를 확정해둔다.
+        SetVisible(DefaultVisibleBeforeBind);
+    }
+
     protected virtual void Start()
     {
         if (session != null)

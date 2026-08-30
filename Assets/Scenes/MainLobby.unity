@@ -2393,6 +2393,7 @@ MonoBehaviour:
   timerText: {fileID: 1001271307}
   format: "\uC7A0\uC2DC \uD6C4 \uBC34\uD53D\uC774 \uC2DC\uC791\uB429\uB2C8\uB2E4
     ({0}\uCD08)"
+  waitingFormat: "\uC7A0\uC2DC \uD6C4 \uBC34\uD53D\uC774 \uC2DC\uC791\uB429\uB2C8\uB2E4..."
 --- !u!1 &751375067
 GameObject:
   m_ObjectHideFlags: 0
@@ -2596,7 +2597,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &790015516
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8017,10 +8018,10 @@ SceneRoots:
   m_Roots:
   - {fileID: 519420032}
   - {fileID: 2147075055}
-  - {fileID: 754006282}
-  - {fileID: 23338027}
+  - {fileID: 749112543}
   - {fileID: 790015519}
   - {fileID: 1121638218}
   - {fileID: 928093047}
-  - {fileID: 749112543}
   - {fileID: 571497972}
+  - {fileID: 754006282}
+  - {fileID: 23338027}
