@@ -100,7 +100,7 @@ public class UniversalFilterButton : MonoBehaviour
     
     private void ApplyMediatorVisualState(bool isSelected)
     {
-        _styleMediator?.ApplyStyle(iconImage, backgroundImage, isSelected);
+        _styleMediator?.ApplyStyle(iconImage, backgroundImage, labelText, isSelected);
     }
     
     #endregion
@@ -140,6 +140,11 @@ public class UniversalFilterButton : MonoBehaviour
         // Button이 없으면 자동으로 가져오기
         if (!button) 
             button = GetComponent<Button>();
+        // 비주얼(색상 등)은 전부 Mediator가 수동으로 관리하므로
+        // Selectable의 자동 Color Tint 트랜지션이 backgroundImage/iconImage 색을
+        // 되돌리지 못하도록 꺼둔다. (안 꺼두면 클릭/호버 시 배경색이 원래대로 복구됨)
+        if (button != null)
+            button.transition = Selectable.Transition.None;
     }
     
     private void OnDestroy()

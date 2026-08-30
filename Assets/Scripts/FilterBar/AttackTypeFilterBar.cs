@@ -6,17 +6,15 @@ public class AttackTypeFilterBar : DynamicFilterBar<AttackType>
 {
     private void Awake() => config = FilterBarConfig.Default;
 
-    protected override string GetSpriteName(AttackType value)
-    {
-        return value.ToCommonSpriteName(); 
-    }
+    protected override string GetSpriteName(AttackType value) => 
+        value.ToCommonSpriteName();
+    protected override string GetAllButtonText() => "All";
     
     protected override IFilterButtonMediator CreateButtonMediator(AttackType? value)
     {
         if (!value.HasValue)
         {
-            // All 버튼
-            return FilterButtonMediatorFactory.CreateGrayToggle(Color.white);
+            return FilterButtonMediatorFactory.CreateTextBgSwap(Palette.DeepBlue);
         }
         
         // Generic Mediator가 자동으로 GetThemeColor() 호출

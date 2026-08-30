@@ -14,6 +14,10 @@ public struct FilterStyleData
     public Color BgColorDefault;
     public Color BgColorSelected;
     
+    // ⭐ NEW: 텍스트 색상 (선택적 — null이면 변경 안 함)
+    public Color? TextColorDefault;
+    public Color? TextColorSelected;
+    
     // 선택적: 애니메이션 설정
     public float TransitionDuration;
     

@@ -69,6 +69,12 @@ public abstract class DynamicFilterBar<T> : BaseFilterBar<T> where T : struct, E
     protected abstract string GetSpriteName(T value);
     
     /// <summary>
+    /// 개별 버튼에 표시할 텍스트 (선택사항)
+    /// null이면 기존처럼 아이콘만 표시. 값을 반환하면 아이콘+텍스트 동시 표시.
+    /// </summary>
+    protected virtual string GetDisplayText(T value) => null;
+    
+    /// <summary>
     /// 버튼별 Mediator 생성 (자식 클래스에서 오버라이드)
     /// </summary>
     protected virtual IFilterButtonMediator CreateButtonMediator(T? value)
@@ -269,7 +275,8 @@ public abstract class DynamicFilterBar<T> : BaseFilterBar<T> where T : struct, E
 
             string spriteName = GetSpriteName(type);
             Sprite icon = AtlasService.GetSprite(config.AtlasKey, spriteName);
-
+            string displayText = GetDisplayText(type);
+            
             var mediator = CreateButtonMediator(type);
             
             if (icon == null)
@@ -278,8 +285,8 @@ public abstract class DynamicFilterBar<T> : BaseFilterBar<T> where T : struct, E
             }
 
             bool isSelected = CurrentValue.HasValue && CurrentValue.Value.Equals(type);
-            btn.Setup(null, icon, isSelected, () => OnItemClicked(type), mediator);
-
+            //btn.Setup(null, icon, isSelected, () => OnItemClicked(type), mediator);
+            btn.Setup(displayText, icon, isSelected, () => OnItemClicked(type), mediator);
             OnButtonCreated(btn, type);
 
             buttonMap[type] = btn;

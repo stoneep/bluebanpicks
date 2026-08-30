@@ -15,18 +15,16 @@ public class AffiliationFilterBar : DynamicFilterBar<Affiliation>
         return $"logo_{value.ToString().ToLowerInvariant()}";
     }
 
-    protected override string GetAllButtonSpriteName()
-    {
-        // atlas/icon_affiliation 안에 "logo_all" 스프라이트가 있어야 합니다.
-        return "logo_all";
-    }
+    protected override string GetAllButtonText() => "All";
 
     protected override IFilterButtonMediator CreateButtonMediator(Affiliation? value)
     {
         if (!value.HasValue)
         {
-            // All 버튼
-            return FilterButtonMediatorFactory.CreateGrayToggle(Color.white);
+            // return FilterButtonMediatorFactory.CreateGrayToggle(
+            //     Color.white, allTextColorDefault, allTextColorSelected);
+            // All 버튼 (텍스트 전용) - 배경 <-> 텍스트 색상 스왑
+            return FilterButtonMediatorFactory.CreateTextBgSwap(Palette.DeepBlue);
         }
         
         return FilterButtonMediatorFactory.CreateWhiteGrayBg();

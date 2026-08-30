@@ -3,7 +3,7 @@ using UnityEngine;
 
 public static class CombatTypeColor
 {
-    public static Color TacticalRoleAll => Palette.MenuDarkBlue; // 원하는 색으로 교체 가능
+    public static Color TacticalRoleAll => Palette.DeepBlue; // 원하는 색으로 교체 가능
     
     // Attack Type Color
     public static Color Attack(AttackType type)

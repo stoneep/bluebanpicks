@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using TMPro;
+using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
@@ -8,36 +9,50 @@ using UnityEngine.UI;
 /// </summary>
 public interface IFilterButtonMediator
 {
-    void ApplyStyle(Image iconImage, Image bgImage, bool isSelected);
+    void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected);
 }
 
 /// <summary>
 /// Gray Toggle 중재자
 /// - 아이콘: 회색 ↔ 흰색
 /// - 배경: 투명 ↔ 지정 색상
+/// - 텍스트: (선택) 지정 시 선택/미선택 색상 적용, 미지정 시 기존 색 유지
 /// </summary>
 public class GrayToggleMediator : IFilterButtonMediator
 {
     private readonly Color assignedColor;
-    
-    public GrayToggleMediator(Color assignedColor)
+    private readonly Color? textColorDefault;
+    private readonly Color? textColorSelected;
+
+    public GrayToggleMediator(Color assignedColor, Color? textColorDefault = null, Color? textColorSelected = null)
     {
         this.assignedColor = assignedColor;
+        this.textColorDefault = textColorDefault;
+        this.textColorSelected = textColorSelected;
     }
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
         // 배경: 항상 고정 색상
         if (bgImage != null)
         {
             bgImage.color = assignedColor;
         }
-        
+
         // 아이콘: 투명도로 선택 표현
         if (iconImage != null)
         {
             float alpha = isSelected ? 1.0f : 0.4f;
             iconImage.color = new Color(1f, 1f, 1f, alpha);
+        }
+
+        // 텍스트: 색상이 지정된 경우에만 적용 (하위 호환)
+        if (labelText != null)
+        {
+            if (isSelected && textColorSelected.HasValue)
+                labelText.color = textColorSelected.Value;
+            else if (!isSelected && textColorDefault.HasValue)
+                labelText.color = textColorDefault.Value;
         }
     }
 }
@@ -46,8 +61,8 @@ public class TextToggleMediator : IFilterButtonMediator
 {
     private readonly Color defaultColor = Palette.AzureishWhite;
     private readonly Color selectedColor = Palette.SemiBlack;
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
         if (bgImage != null)
         {
@@ -65,14 +80,14 @@ public class IconColorMediator : IFilterButtonMediator
 {
     private readonly Color iconColor;
     private readonly Color selectedBgColor;
-    
+
     public IconColorMediator(Color iconColor, Color selectedBgColor)
     {
         this.iconColor = iconColor;
         this.selectedBgColor = selectedBgColor;
     }
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
         iconImage.color = iconColor;
         bgImage.color = isSelected ? selectedBgColor : Color.clear;
@@ -88,14 +103,14 @@ public class FullColorMediator : IFilterButtonMediator
 {
     private readonly Color themeColor;
     private readonly Color darkIconColor;
-    
+
     public FullColorMediator(Color themeColor)
     {
         this.themeColor = themeColor;
         this.darkIconColor = themeColor * 0.7f;
     }
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
         iconImage.color = isSelected ? Color.white : darkIconColor;
         bgImage.color = isSelected ? themeColor : Color.clear;
@@ -104,7 +119,7 @@ public class FullColorMediator : IFilterButtonMediator
 
 
 /// <summary>
-/// ⭐ NEW: Icon Gray Toggle 중재자
+/// ⭐ Icon Gray Toggle 중재자
 /// - 아이콘: 회색 ↔ 흰색
 /// - 배경: 변경 없음 (투명 유지)
 /// - 사용처: DefenseType, AttackType 필터
@@ -113,15 +128,15 @@ public class IconGrayToggleMediator : IFilterButtonMediator
 {
     private readonly Color normalIconColor = Palette.SemiBlack;
     private readonly Color selectedIconColor = Palette.AzureishWhite;
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
         // 아이콘: 선택 여부에 따라 색상 변경
         if (iconImage != null)
         {
             iconImage.color = isSelected ? selectedIconColor : normalIconColor;
         }
-        
+
         // 배경: 변경 없음 (제어하지 않음)
         // if (bgImage != null)
         // {
@@ -138,27 +153,27 @@ public class IconGrayToggleMediator : IFilterButtonMediator
 
 public class WhiteBgGrayMediator : IFilterButtonMediator
 {
-    private static readonly Color WHITE = Palette.AzureishWhite;
-    private static readonly Color GRAY = Palette.MenuDarkBlue;
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+    private static readonly Color WHITE = Palette.AntibioticsWhite;
+    private static readonly Color deeblue = Palette.DeepBlue;
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
         // if (iconImage != null)
         // {
         //     iconImage.color = isSelected ? WHITE : BLACK;
         // }
-        
+
         if (bgImage != null)
         {
-            bgImage.color = isSelected ? GRAY : WHITE;
+            bgImage.color = isSelected ? deeblue : WHITE;
         }
     }
 }
 
 /// <summary>
-/// ⭐ NEW: Black Icon Gray Background 중재자
-/// - 미선택: 검정 아이콘 + 회색 배경 /아이콘이 카테고리 글자
-/// - 선택: 흰색 아이콘 + 검정 배경
+/// ⭐ Black Icon Gray Background 중재자
+/// - 미선택: 검정 아이콘  회색 배경 /아이콘이 카테고리 글자
+/// - 선택: 흰색 아이콘  검정 배경
 /// - 사용처: ItemCategory 필터
 /// </summary>
 public class BlackIconGrayBgMediator : IFilterButtonMediator
@@ -166,14 +181,14 @@ public class BlackIconGrayBgMediator : IFilterButtonMediator
     private static readonly Color BLACK = Color.black;
     private static readonly Color WHITE = Palette.AzureishWhite;
     private static readonly Color GRAY = Palette.MenuDarkBlue;
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
         if (iconImage != null)
         {
             iconImage.color = isSelected ? WHITE : BLACK;
         }
-        
+
         if (bgImage != null)
         {
             bgImage.color = isSelected ? BLACK : GRAY;
@@ -182,7 +197,7 @@ public class BlackIconGrayBgMediator : IFilterButtonMediator
 }
 
 /// <summary>
-/// ⭐ NEW: Icon-Background Color Swap 중재자
+/// ⭐ Icon-Background Color Swap 중재자
 /// - 미선택: 아이콘=타입 색상, 배경=흰색
 /// - 선택: 아이콘=흰색, 배경=타입 색상
 /// - 사용처: TacticalRoleFilterBar
@@ -191,29 +206,27 @@ public class IconBgColorSwapMediator : IFilterButtonMediator
 {
     private readonly Color themeColor;
     private static readonly Color WHITE = Color.white;
-    
+
     public IconBgColorSwapMediator(Color themeColor)
     {
         this.themeColor = themeColor;
     }
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
         if (isSelected)
         {
-            // 선택: 아이콘 흰색, 배경 타입 색상
             if (iconImage != null)
                 iconImage.color = WHITE;
-            
+
             if (bgImage != null)
                 bgImage.color = themeColor;
         }
         else
         {
-            // 미선택: 아이콘 타입 색상, 배경 흰색
             if (iconImage != null)
                 iconImage.color = themeColor;
-            
+
             if (bgImage != null)
                 bgImage.color = WHITE;
         }
@@ -221,7 +234,39 @@ public class IconBgColorSwapMediator : IFilterButtonMediator
 }
 
 /// <summary>
-/// ⭐ NEW: Generic Icon-Background Color Swap 중재자
+/// ⭐ Text-Background Color Swap 중재자 (아이콘 없는 버튼 전용)
+/// - 미선택: 텍스트=지정 색상, 배경=흰색
+/// - 선택: 텍스트=흰색, 배경=지정 색상
+/// - 아이콘은 건드리지 않음 (아이콘이 아예 없는 버튼, 예: All 버튼용)
+/// </summary>
+public class TextBgSwapMediator : IFilterButtonMediator
+{
+    private readonly Color themeColor;
+    private static readonly Color WHITE = Palette.AzureishWhite;
+
+    public TextBgSwapMediator(Color themeColor)
+    {
+        this.themeColor = themeColor;
+    }
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
+    {
+        if (isSelected)
+        {
+            if (labelText != null) labelText.color = WHITE;
+            if (bgImage != null) bgImage.color = themeColor;
+        }
+        else
+        {
+            if (labelText != null) labelText.color = themeColor;
+            if (bgImage != null) bgImage.color = WHITE;
+        }
+        // iconImage는 의도적으로 건드리지 않음
+    }
+}
+
+/// <summary>
+/// ⭐ Generic Icon-Background Color Swap 중재자
 /// - Enum 타입의 GetThemeColor() 확장 메서드를 직접 호출
 /// - 미선택: 아이콘=타입 색상, 배경=흰색
 /// - 선택: 아이콘=흰색, 배경=타입 색상
@@ -231,114 +276,136 @@ public class GenericIconBgSwapMediator<T> : IFilterButtonMediator where T : stru
 {
     private readonly T enumValue;
     private static readonly Color WHITE = Palette.AzureishWhite;
-    
+
     public GenericIconBgSwapMediator(T value)
     {
         this.enumValue = value;
     }
-    
-    public void ApplyStyle(Image iconImage, Image bgImage, bool isSelected)
+
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
-        // ⭐ 런타임에 확장 메서드 호출하여 색상 가져오기
         Color themeColor = GetThemeColorDynamic();
-        
+
         if (isSelected)
         {
-            // 선택: 아이콘 흰색, 배경 타입 색상
             if (iconImage != null)
                 iconImage.color = WHITE;
-            
+
             if (bgImage != null)
                 bgImage.color = themeColor;
         }
         else
         {
-            // 미선택: 아이콘 타입 색상, 배경 흰색
             if (iconImage != null)
                 iconImage.color = themeColor;
-            
+
             if (bgImage != null)
                 bgImage.color = WHITE;
         }
     }
-    
-    /// <summary>
-    /// 동적으로 확장 메서드 호출 (리플렉션 없이 타입 체크)
-    /// </summary>
+
     private Color GetThemeColorDynamic()
     {
-        // TacticalRole인 경우
         if (enumValue is TacticalRole role)
             return role.GetThemeColor();
-        
-        // Role인 경우
+
         if (enumValue is Role roleType)
             return roleType.GetThemeColor();
-        
-        // AttackType인 경우
+
         if (enumValue is AttackType attackType)
             return attackType.GetThemeColor();
-        
-        // DefenseType인 경우
+
         if (enumValue is DefenseType defenseType)
             return defenseType.GetThemeColor();
-        
-        // 폴백: 흰색
+
         return Color.white;
     }
 }
 
+public class GenericIconTextBgSwapMediator<T> : IFilterButtonMediator where T : struct, System.Enum
+{
+    private readonly T enumValue;
+    private static readonly Color WHITE = Palette.AzureishWhite;
 
+    public GenericIconTextBgSwapMediator(T value) { this.enumValue = value; }
 
+    public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
+    {
+        Color themeColor = GetThemeColorDynamic();
+        if (isSelected)
+        {
+            if (iconImage != null) iconImage.color = WHITE;
+            if (labelText != null) labelText.color = WHITE;
+            if (bgImage != null) bgImage.color = themeColor;
+        }
+        else
+        {
+            if (iconImage != null) iconImage.color = themeColor;
+            if (labelText != null) labelText.color = themeColor;
+            if (bgImage != null) bgImage.color = WHITE;
+        }
+    }
+    
+    private Color GetThemeColorDynamic()
+    {
+        if (enumValue is TacticalRole role)
+            return role.GetThemeColor();
+
+        if (enumValue is Role roleType)
+            return roleType.GetThemeColor();
+
+        if (enumValue is AttackType attackType)
+            return attackType.GetThemeColor();
+
+        if (enumValue is DefenseType defenseType)
+            return defenseType.GetThemeColor();
+
+        return Color.white;
+    }
+}
 
 /// <summary>
 /// 중재자 팩토리
 /// </summary>
 public static class FilterButtonMediatorFactory
 {
-    public static IFilterButtonMediator CreateGrayToggle(Color selectedBgColor) 
+    public static IFilterButtonMediator CreateGrayToggle(Color selectedBgColor)
         => new GrayToggleMediator(selectedBgColor);
 
-    public static IFilterButtonMediator CreateIconColor(Color iconColor, Color selectedBgColor) 
+    /// <summary>
+    /// ⭐ NEW: 텍스트 색상까지 지정하는 오버로드
+    /// 선택/미선택 상태에 따라 라벨 텍스트 색상도 함께 전환됩니다.
+    /// </summary>
+    public static IFilterButtonMediator CreateGrayToggle(Color selectedBgColor, Color textColorDefault, Color textColorSelected)
+        => new GrayToggleMediator(selectedBgColor, textColorDefault, textColorSelected);
+
+    public static IFilterButtonMediator CreateIconColor(Color iconColor, Color selectedBgColor)
         => new IconColorMediator(iconColor, selectedBgColor);
 
-    public static IFilterButtonMediator CreateFullColor(Color themeColor) 
+    public static IFilterButtonMediator CreateFullColor(Color themeColor)
         => new FullColorMediator(themeColor);
 
-    /// <summary>
-    /// ⭐ NEW: 아이콘만 회색↔흰색 토글 (배경 변경 없음)
-    /// DefenseType, AttackType 필터에서 사용
-    /// </summary>
-    public static IFilterButtonMediator CreateIconGrayToggle() 
+    public static IFilterButtonMediator CreateIconGrayToggle()
         => new IconGrayToggleMediator();
 
-    public static IFilterButtonMediator TextToggleMediator() 
+    public static IFilterButtonMediator TextToggleMediator()
         => new TextToggleMediator();
 
-    /// <summary>
-    /// ⭐ NEW: 검정 아이콘/회색 배경 → 흰색 아이콘/검정 배경
-    /// ItemCategory 필터에서 사용
-    /// </summary>
-    public static IFilterButtonMediator CreateBlackIconGrayBg() 
+    public static IFilterButtonMediator CreateBlackIconGrayBg()
         => new BlackIconGrayBgMediator();
 
-    /// <summary>
-    /// ⭐ NEW: 배경만 회색↔흰색 토글 (아이콘 변경 없음)
-    /// - 사용처: AffiliationFilterBar
-    /// </summary>
-    public static IFilterButtonMediator CreateWhiteGrayBg() 
+    public static IFilterButtonMediator CreateWhiteGrayBg()
         => new WhiteBgGrayMediator();
 
-    /// <summary>
-    /// ⭐ NEW: 아이콘-배경 색상 교환
-    /// TacticalRole 필터에서 사용
-    /// </summary>
-    public static IFilterButtonMediator CreateIconBgColorSwap(Color themeColor) 
+    public static IFilterButtonMediator CreateIconBgColorSwap(Color themeColor)
         => new IconBgColorSwapMediator(themeColor);
 
-    /// <summary>
-    /// ⭐ NEW: Generic 아이콘-배경 색상 교환 (확장 메서드 자동 호출)
-    /// </summary>
-    public static IFilterButtonMediator CreateGenericIconBgSwap<T>(T enumValue) where T : struct, System.Enum 
+    public static IFilterButtonMediator CreateGenericIconBgSwap<T>(T enumValue) where T : struct, System.Enum
         => new GenericIconBgSwapMediator<T>(enumValue);
+
+    public static IFilterButtonMediator CreateGenericIconTextBgSwap<T>(T enumValue) where T : struct, System.Enum
+        => new GenericIconTextBgSwapMediator<T>(enumValue);
+    
+    public static IFilterButtonMediator CreateTextBgSwap(Color themeColor) 
+        => new TextBgSwapMediator(themeColor);
 }

@@ -66,9 +66,12 @@ public static class Palette
     
     public static readonly Color DeepOrange  = "#FF5722".ToColor();
     public static readonly Color SkyBlue     = "#87CEEB".ToColor();
+    public static readonly Color DeepBlue     = "#153756".ToColor();
+    public static readonly Color SoftBlue    = "#8ED8FC".ToColor();
     public static readonly Color NeonGreen   = "39FF14".ToColor();
     public static readonly Color MenuDarkBlue= "686880".ToColor();
     public static readonly Color MenuWhite   = "DBD7D6".ToColor();
+    public static readonly Color AntibioticsWhite   = "EAF1F1".ToColor();
     public static readonly Color SemiBlack   = "#00000080".ToColor(); // 반투명
 
 

@@ -4,11 +4,9 @@ public class TacticalRoleFilterBar : DynamicFilterBar<TacticalRole>
 {
     private void Awake() => config = FilterBarConfig.Default;
     
-    protected override string GetSpriteName(TacticalRole value)
-    {
-        return value.ToSpriteName(); 
-    }
-    
+    protected override string GetSpriteName(TacticalRole value) => 
+        value.ToSpriteName();
+
     protected override string GetAllButtonSpriteName()
     {
         return "tacticalRole_all";
