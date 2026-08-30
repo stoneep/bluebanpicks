@@ -74,7 +74,7 @@ public sealed class RoleIndicator : MonoBehaviour
         else if (myClientId == session.SecondSideClientId.Value)
             label = "후공";
         else
-            label = "관전"; // 호스트를 포함해, 선공/후공 어디에도 배정되지 않은 클라이언트는 전부 관전자
+            label = "대기중"; // 호스트를 포함해, 선공/후공 어디에도 배정되지 않은 클라이언트는 전부 관전자
 
         roleText.text = label;
     }

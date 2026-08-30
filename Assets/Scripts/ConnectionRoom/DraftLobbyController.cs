@@ -81,6 +81,8 @@ public class DraftLobbyController : MonoBehaviour
         session.FirstSideClientId.OnValueChanged += HandleSideAssignmentChanged;
         session.SecondSideClientId.OnValueChanged += HandleSideAssignmentChanged;
         session.HostCanPlay.OnValueChanged += HandleHostCanPlayChanged;
+        session.PreDraftLoadBufferSeconds.OnValueChanged += HandleTimerSettingChanged;
+        session.TurnTimeLimitSeconds.OnValueChanged += HandleTimerSettingChanged;
 
         RebuildRows();
         RefreshInteractable();
@@ -98,6 +100,8 @@ public class DraftLobbyController : MonoBehaviour
         session.FirstSideClientId.OnValueChanged -= HandleSideAssignmentChanged;
         session.SecondSideClientId.OnValueChanged -= HandleSideAssignmentChanged;
         session.HostCanPlay.OnValueChanged -= HandleHostCanPlayChanged;
+        session.PreDraftLoadBufferSeconds.OnValueChanged -= HandleTimerSettingChanged;
+        session.TurnTimeLimitSeconds.OnValueChanged -= HandleTimerSettingChanged;
 
         ClearRows();
         session = null;
@@ -112,17 +116,21 @@ public class DraftLobbyController : MonoBehaviour
         ClearRows();
 
         bool editable = IsHostInLobby();
+        float preDraftBuffer = session.PreDraftLoadBufferSeconds.Value;
+        float turnTimeLimit = session.TurnTimeLimitSeconds.Value;
 
         foreach (var netRound in session.Format)
         {
             var row = Instantiate(roundRowPrefab, roundListContainer);
             row.Bind(netRound.ToRoundConfig());
+            row.BindTimers(preDraftBuffer, turnTimeLimit); // 세션 공통값이라 모든 행에 동일하게 채움
             row.SetInteractable(editable);
 
             if (editable)
             {
                 row.OnEdited += ApplyRowsToServer;
                 row.OnRemoveRequested += () => HandleRemoveRow(row);
+                row.OnTimerEdited += () => HandleTimerEdited(row);
             }
 
             rows.Add(row);
@@ -209,6 +217,32 @@ public class DraftLobbyController : MonoBehaviour
     }
 
     private void ApplyRowsToServer() => session.HostSetFormat(CollectCurrentRows());
+
+    // ==================== 타이머 (세션 공통값) ====================
+
+    /// <summary>어느 행에서 타이머 값을 고쳤든, 그 행의 현재 입력값을 세션 공통값으로 반영한다.</summary>
+    private void HandleTimerEdited(DraftRoundRowView row)
+    {
+        var (preDraftBuffer, turnTimeLimit) = row.ReadTimerValues();
+        session.HostSetTimerSettings(preDraftBuffer, turnTimeLimit);
+    }
+
+    /// <summary>서버 값이 바뀌면(내가 방금 고친 것 포함) 모든 행의 표시값을 다시 맞춘다.</summary>
+    private void HandleTimerSettingChanged(float previous, float current) => RefreshTimerFields();
+
+    private void RefreshTimerFields()
+    {
+        if (session == null) return;
+
+        float preDraftBuffer = session.PreDraftLoadBufferSeconds.Value;
+        float turnTimeLimit = session.TurnTimeLimitSeconds.Value;
+
+        foreach (var row in rows)
+        {
+            if (!row) continue;
+            row.BindTimers(preDraftBuffer, turnTimeLimit);
+        }
+    }
 
     // ==================== 진영 배정 / 시작 ====================
 

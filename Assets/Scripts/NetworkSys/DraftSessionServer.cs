@@ -61,14 +61,24 @@ public class DraftSessionServer : NetworkBehaviour
              "먼저 등록되어 있어야 하고, NetworkManager 인스펙터에서 Enable Scene Management가 켜져 있어야 한다.")]
     [SerializeField] private string draftSceneName = "MainLobby";
 
-    [Header("Timers")]
+    [Header("Timers (기본값 - 대기실에서 HostSetTimerSettings로 덮어쓸 수 있음)")]
     [Tooltip("밴픽씬(MainLobby) 로드가 끝난 직후, 혹시 모를 클라이언트 UI/에셋 로딩 지연을 위해 " +
              "실제 밴/픽 시작 전에 대기하는 시간(초). 이 시간 동안 State는 Loading이다.")]
-    [SerializeField] private float preDraftLoadBufferSeconds = 15f;
+    [SerializeField] private float defaultPreDraftLoadBufferSeconds = 15f;
 
     [Tooltip("밴/픽 각 턴마다 주어지는 제한 시간(초). 시간 안에 선택하지 않으면 서버가 " +
              "남아있는 캐릭터 중 하나를 자동으로 대신 선택한다. 0 이하로 두면 턴 타이머를 쓰지 않는다.")]
-    [SerializeField] private float turnTimeLimitSeconds = 30f;
+    [SerializeField] private float defaultTurnTimeLimitSeconds = 30f;
+
+    /// <summary>
+    /// 실제로 쓰이는 preDraftLoadBufferSeconds 값. 인스펙터 기본값(defaultPreDraftLoadBufferSeconds)으로
+    /// OnNetworkSpawn 때 초기화되고, 이후 대기실(Lobby)에서 HostSetTimerSettings로 바꿀 수 있다.
+    /// 세션 전체에 공통으로 적용되는 값이라 라운드마다 다르지 않다.
+    /// </summary>
+    public readonly NetworkVariable<float> PreDraftLoadBufferSeconds = new(15f);
+
+    /// <summary>실제로 쓰이는 turnTimeLimitSeconds 값. PreDraftLoadBufferSeconds와 동일한 방식.</summary>
+    public readonly NetworkVariable<float> TurnTimeLimitSeconds = new(30f);
 
     /// <summary>Loading 상태에서 남은 대기 시간(초). Loading이 아닐 때는 0.</summary>
     public readonly NetworkVariable<float> PreDraftSecondsRemaining = new(0f);
@@ -117,6 +127,14 @@ public class DraftSessionServer : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         Instance = this;
+
+        if (IsServer)
+        {
+            // NetworkVariable의 생성자 기본값이 아니라 인스펙터에 설정된 값으로 시작하도록 스폰 시점에 반영.
+            PreDraftLoadBufferSeconds.Value = defaultPreDraftLoadBufferSeconds;
+            TurnTimeLimitSeconds.Value = defaultTurnTimeLimitSeconds;
+        }
+
         Debug.Log($"[{nameof(DraftSessionServer)}] OnNetworkSpawn (session={GetEntityId()}, " +
                   $"scene={gameObject.scene.name}) @ frame {Time.frameCount}");
         OnSessionReady?.Invoke(this);
@@ -209,6 +227,29 @@ public class DraftSessionServer : NetworkBehaviour
         HostCanPlay.Value = value;
     }
 
+    /// <summary>
+    /// 대기실에서 preDraft 로딩 유예시간 / 턴 제한시간을 세션 공통값으로 설정한다.
+    /// 라운드별로 다르지 않고 세션 전체에 하나만 존재하는 값이므로, 어느 라운드 행(UI)에서
+    /// 값을 바꾸든 이 메서드를 거쳐 전체(NetworkVariable)에 반영되고 모든 클라이언트 화면에 동기화된다.
+    /// Lobby 상태에서만 변경 가능(진행 중에 바뀌면 이미 시작된 카운트다운과 어긋날 수 있으므로).
+    /// </summary>
+    public void HostSetTimerSettings(float preDraftBufferSeconds, float turnTimeLimitSecondsValue)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostSetTimerSettings는 서버(호스트)에서만 호출할 수 있습니다.");
+            return;
+        }
+        if (State.Value != DraftSessionState.Lobby)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 타이머 설정을 바꿀 수 없습니다.");
+            return;
+        }
+
+        PreDraftLoadBufferSeconds.Value = Mathf.Max(0f, preDraftBufferSeconds);
+        TurnTimeLimitSeconds.Value = Mathf.Max(0f, turnTimeLimitSecondsValue);
+    }
+
     // ==================== 대기실 -> 드래프트 시작 (호스트 전용) ====================
 
     public void HostStartDraft()
@@ -283,7 +324,7 @@ public class DraftSessionServer : NetworkBehaviour
         State.Value = DraftSessionState.Loading;
         IsPaused.Value = false; // Loading 진입 시에도 이전 상태가 남아있지 않도록 확실히 초기화
         Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to Loading, " +
-                  $"{preDraftLoadBufferSeconds}초 후 자동으로 드래프트를 시작합니다.");
+                  $"{PreDraftLoadBufferSeconds.Value}초 후 자동으로 드래프트를 시작합니다.");
 
         if (preDraftCountdownRoutine != null) StopCoroutine(preDraftCountdownRoutine);
         preDraftCountdownRoutine = StartCoroutine(PreDraftCountdownRoutine());
@@ -291,7 +332,7 @@ public class DraftSessionServer : NetworkBehaviour
 
     private IEnumerator PreDraftCountdownRoutine()
     {
-        float remaining = Mathf.Max(0f, preDraftLoadBufferSeconds);
+        float remaining = Mathf.Max(0f, PreDraftLoadBufferSeconds.Value);
         PreDraftSecondsRemaining.Value = Mathf.Ceil(remaining);
 
         while (remaining > 0f)
@@ -466,7 +507,7 @@ public class DraftSessionServer : NetworkBehaviour
     {
         if (turnTimerRoutine != null) StopCoroutine(turnTimerRoutine);
 
-        if (turnTimeLimitSeconds <= 0f)
+        if (TurnTimeLimitSeconds.Value <= 0f)
         {
             TurnSecondsRemaining.Value = 0f;
             turnTimerRoutine = null;
@@ -485,7 +526,7 @@ public class DraftSessionServer : NetworkBehaviour
 
     private IEnumerator TurnTimerRoutine()
     {
-        float remaining = turnTimeLimitSeconds;
+        float remaining = TurnTimeLimitSeconds.Value;
         TurnSecondsRemaining.Value = Mathf.Ceil(remaining);
 
         while (remaining > 0f)

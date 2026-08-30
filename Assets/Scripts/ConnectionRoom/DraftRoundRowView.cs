@@ -22,13 +22,26 @@ public class DraftRoundRowView : MonoBehaviour
     [SerializeField] private TMP_InputField pickOrderPatternField;
     [SerializeField] private Button removeButton;
 
-    /// <summary>필드 값이 바뀌었을 때 (호스트만 구독해서 서버에 반영하면 됨).</summary>
+    [Header("타이머 (라운드별 값이 아니라 세션 전체 공통값 - 어느 행에서 고쳐도 전체에 적용됨)")]
+    [Tooltip("DraftSessionServer.PreDraftLoadBufferSeconds. 밴픽씬 로드 후 실제 시작 전 대기 시간(초).")]
+    [SerializeField] private TMP_InputField preDraftLoadBufferField;
+    [Tooltip("DraftSessionServer.TurnTimeLimitSeconds. 밴/픽 각 턴의 제한 시간(초). 0 이하면 턴 타이머 없음.")]
+    [SerializeField] private TMP_InputField turnTimeLimitField;
+
+    /// <summary>라운드 필드(슬롯 수/패턴 등) 값이 바뀌었을 때 (호스트만 구독해서 서버에 반영하면 됨).</summary>
     public event Action OnEdited;
+
+    /// <summary>
+    /// 타이머 필드(preDraftLoadBuffer/turnTimeLimit) 값이 바뀌었을 때. 세션 전체 공통값이므로
+    /// OnEdited와 분리했다 - 이 이벤트는 DraftFormatData가 아니라 DraftSessionServer.HostSetTimerSettings로 보내야 한다.
+    /// </summary>
+    public event Action OnTimerEdited;
 
     /// <summary>삭제 버튼을 눌렀을 때.</summary>
     public event Action OnRemoveRequested;
 
     private bool suppressEvents; // Bind()로 값을 채우는 동안 OnEdited가 잘못 발화하지 않도록
+    private bool suppressTimerEvents; // BindTimers()로 값을 채우는 동안 OnTimerEdited가 잘못 발화하지 않도록
 
     private void Awake()
     {
@@ -41,6 +54,9 @@ public class DraftRoundRowView : MonoBehaviour
         banOrderPatternField.onEndEdit.AddListener(_ => RaiseEdited());
         pickOrderPatternField.onEndEdit.AddListener(_ => RaiseEdited());
         removeButton.onClick.AddListener(() => OnRemoveRequested?.Invoke());
+
+        if (preDraftLoadBufferField != null) preDraftLoadBufferField.onEndEdit.AddListener(_ => RaiseTimerEdited());
+        if (turnTimeLimitField != null) turnTimeLimitField.onEndEdit.AddListener(_ => RaiseTimerEdited());
     }
 
     public void SetInteractable(bool interactable)
@@ -54,6 +70,9 @@ public class DraftRoundRowView : MonoBehaviour
         banOrderPatternField.interactable = interactable;
         pickOrderPatternField.interactable = interactable;
         removeButton.interactable = interactable;
+
+        if (preDraftLoadBufferField != null) preDraftLoadBufferField.interactable = interactable;
+        if (turnTimeLimitField != null) turnTimeLimitField.interactable = interactable;
     }
 
     /// <summary>서버 값으로 UI를 채운다. 이 중에는 OnEdited가 발화하지 않는다.</summary>
@@ -72,6 +91,26 @@ public class DraftRoundRowView : MonoBehaviour
 
         suppressEvents = false;
     }
+
+    /// <summary>
+    /// 세션 공통 타이머 값으로 UI를 채운다. 이 중에는 OnTimerEdited가 발화하지 않는다.
+    /// 라운드별 값이 아니라 세션 전체 값이므로, 여러 행을 동시에 이 값으로 채워도 문제없다
+    /// (DraftLobbyController가 모든 행에 동일한 값을 넣어준다).
+    /// </summary>
+    public void BindTimers(float preDraftLoadBufferSeconds, float turnTimeLimitSeconds)
+    {
+        suppressTimerEvents = true;
+
+        if (preDraftLoadBufferField != null) preDraftLoadBufferField.text = FormatSeconds(preDraftLoadBufferSeconds);
+        if (turnTimeLimitField != null) turnTimeLimitField.text = FormatSeconds(turnTimeLimitSeconds);
+
+        suppressTimerEvents = false;
+    }
+
+    /// <summary>지금 UI에 입력된 타이머 값을 읽어온다 (DraftSessionServer.HostSetTimerSettings에 보낼 때 사용).</summary>
+    public (float preDraftLoadBufferSeconds, float turnTimeLimitSeconds) ReadTimerValues() => (
+        ParseNonNegativeFloat(preDraftLoadBufferField != null ? preDraftLoadBufferField.text : null),
+        ParseNonNegativeFloat(turnTimeLimitField != null ? turnTimeLimitField.text : null));
 
     /// <summary>지금 UI에 입력된 값을 DraftRoundConfig로 읽어온다 (서버에 보낼 때 사용).</summary>
     public DraftRoundConfig ReadValue() => new DraftRoundConfig(
@@ -123,6 +162,17 @@ public class DraftRoundRowView : MonoBehaviour
         }
     }
 
+    private void RaiseTimerEdited()
+    {
+        if (suppressTimerEvents) return;
+        OnTimerEdited?.Invoke();
+    }
+
     private static int ParseNonNegativeInt(string text) =>
         int.TryParse(text, out var value) ? Mathf.Max(0, value) : 0;
+
+    private static float ParseNonNegativeFloat(string text) =>
+        float.TryParse(text, out var value) ? Mathf.Max(0f, value) : 0f;
+
+    private static string FormatSeconds(float seconds) => seconds.ToString("0.##");
 }
