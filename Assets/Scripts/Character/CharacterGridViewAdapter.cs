@@ -34,7 +34,9 @@ public sealed class CharacterGridViewAdapter : MonoBehaviour, IFilteredListView<
     {
         currentItems = data ?? new List<CharacterViewData>();
         grid.SetTotalCount(currentItems.Count);
-        charScroller.JumpToTop();
+        // 스크롤을 맨 위로 보낼지 여부는 여기서 결정하지 않는다 - 뒤이어 호출되는
+        // Refresh(bool jumpToTop)이 그 책임을 갖는다. (여기서 무조건 JumpToTop을 부르면
+        // "스크롤 유지" 목적의 Refresh(false) 호출이 무의미해진다)
     }
 
     /// <summary>
@@ -73,6 +75,9 @@ public sealed class CharacterGridViewAdapter : MonoBehaviour, IFilteredListView<
     public void Refresh(bool jumpToTop)
     {
         if (jumpToTop) charScroller.JumpToTop();
-        else grid.Refresh(0);
+        // 스크롤을 유지한 채 보이는 슬롯만 다시 바인딩(선택 하이라이트/락 오버레이 갱신 등).
+        // grid.Refresh(0)처럼 스크롤값을 하드코딩하면 스크롤을 내린 상태에서 호출됐을 때
+        // 엉뚱한 범위를 계산하고, 그마저도 캐싱 가드에 걸려 바인딩이 아예 안 되는 문제가 있었다.
+        else grid.RebindVisible();
     }
 }

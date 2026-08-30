@@ -55,6 +55,11 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
     protected UIComponentPool<T> slotPool;
     protected int itemCount;
     protected int lastStartIndex = -1; // Vertical: startRow / Horizontal: startColumn
+
+    // Refresh(scrollValue)에 마지막으로 들어온 스크롤 값을 기억해둔다.
+    // RebindVisible()이 "레이아웃을 처음부터 다시 배치해야 하는 상황(ForceRefresh 직후)"에
+    // 스크롤을 0으로 되돌리지 않고 원래 위치를 그대로 복원하기 위해 사용한다.
+    protected float lastScrollValue = 0f;
     
     // Viewport 캐싱
     protected RectTransform cachedViewport;
@@ -98,6 +103,8 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
             scrollValue = Mathf.Clamp(scrollValue, scrollRange.y, scrollRange.x);
         }
 
+        lastScrollValue = scrollValue;
+
         if (layoutMode == GridLayoutMode.Vertical)
         {
             RefreshVertical(scrollValue);
@@ -105,6 +112,45 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         else
         {
             RefreshHorizontal(scrollValue);
+        }
+    }
+
+    /// <summary>
+    /// 스크롤 위치나 배치(레이아웃)는 그대로 두고, 지금 화면에 보이는(활성화된) 슬롯들만
+    /// 다시 바인딩한다. 선택 하이라이트, 밴/픽 락 오버레이처럼 "위치는 안 바뀌었지만
+    /// 슬롯에 표시할 내용은 바뀐" 경우에 사용한다.
+    ///
+    /// Refresh(scrollValue)는 "startRow(또는 startColumn)가 이전과 같으면 아무것도 안 한다"는
+    /// 캐싱 최적화가 있어서, 스크롤을 움직이지 않은 채로 이 용도로 Refresh를 호출하면
+    /// OnRequestBind가 아예 발화하지 않는 문제가 있었다. 그래서 이 캐시를 완전히 우회하는
+    /// 별도 경로가 필요하다.
+    /// </summary>
+    public void RebindVisible()
+    {
+        if (slotPool == null) return;
+
+        // SetTotalCount() 직후(ForceRefresh로 lastStartIndex가 -1로 초기화된 상태)라면
+        // 아직 한 번도 배치되지 않은 것이므로, 이전 스크롤 위치 기준으로 완전히 다시 배치해야 한다.
+        if (lastStartIndex < 0)
+        {
+            Refresh(lastScrollValue);
+            return;
+        }
+
+        int startIndex = layoutMode == GridLayoutMode.Vertical
+            ? lastStartIndex * columns
+            : lastStartIndex * rows;
+
+        int poolCount = slotPool.Items.Count;
+        for (int i = 0; i < poolCount; i++)
+        {
+            int dataIndex = startIndex + i;
+            if (dataIndex < 0 || dataIndex >= itemCount) continue;
+
+            var slot = slotPool.Items[i];
+            if (slot == null || !slot.gameObject.activeSelf) continue; // 컬링/비활성 슬롯은 스킵
+
+            OnRequestBind?.Invoke(dataIndex, slot);
         }
     }
 
