@@ -65,6 +65,8 @@ public static class Palette
     // ==========================================
     
     public static readonly Color DeepOrange  = "#FF5722".ToColor();
+    public static readonly Color OffWhite  = "#FAF9F6".ToColor();
+    public static readonly Color searchWhite  = "#FFFFFF".ToColor();
     public static readonly Color SkyBlue     = "#87CEEB".ToColor();
     public static readonly Color DeepBlue     = "#153756".ToColor();
     public static readonly Color SoftBlue    = "#8ED8FC".ToColor();

@@ -59,7 +59,7 @@ public class GrayToggleMediator : IFilterButtonMediator
 
 public class TextToggleMediator : IFilterButtonMediator
 {
-    private readonly Color defaultColor = Palette.AzureishWhite;
+    private readonly Color defaultColor = Palette.searchWhite;
     private readonly Color selectedColor = Palette.SemiBlack;
 
     public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
@@ -127,7 +127,7 @@ public class FullColorMediator : IFilterButtonMediator
 public class IconGrayToggleMediator : IFilterButtonMediator
 {
     private readonly Color normalIconColor = Palette.SemiBlack;
-    private readonly Color selectedIconColor = Palette.AzureishWhite;
+    private readonly Color selectedIconColor = Palette.searchWhite;
 
     public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
     {
@@ -153,7 +153,7 @@ public class IconGrayToggleMediator : IFilterButtonMediator
 
 public class WhiteBgGrayMediator : IFilterButtonMediator
 {
-    private static readonly Color WHITE = Palette.AntibioticsWhite;
+    private static readonly Color WHITE = Palette.OffWhite;
     private static readonly Color deeblue = Palette.DeepBlue;
 
     public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
@@ -179,7 +179,7 @@ public class WhiteBgGrayMediator : IFilterButtonMediator
 public class BlackIconGrayBgMediator : IFilterButtonMediator
 {
     private static readonly Color BLACK = Color.black;
-    private static readonly Color WHITE = Palette.AzureishWhite;
+    private static readonly Color WHITE = Palette.searchWhite;
     private static readonly Color GRAY = Palette.MenuDarkBlue;
 
     public void ApplyStyle(Image iconImage, Image bgImage, TMP_Text labelText, bool isSelected)
@@ -242,7 +242,7 @@ public class IconBgColorSwapMediator : IFilterButtonMediator
 public class TextBgSwapMediator : IFilterButtonMediator
 {
     private readonly Color themeColor;
-    private static readonly Color WHITE = Palette.AzureishWhite;
+    private static readonly Color WHITE = Palette.searchWhite;
 
     public TextBgSwapMediator(Color themeColor)
     {
@@ -275,7 +275,7 @@ public class TextBgSwapMediator : IFilterButtonMediator
 public class GenericIconBgSwapMediator<T> : IFilterButtonMediator where T : struct, System.Enum
 {
     private readonly T enumValue;
-    private static readonly Color WHITE = Palette.AzureishWhite;
+    private static readonly Color WHITE = Palette.searchWhite;
 
     public GenericIconBgSwapMediator(T value)
     {
@@ -325,7 +325,7 @@ public class GenericIconBgSwapMediator<T> : IFilterButtonMediator where T : stru
 public class GenericIconTextBgSwapMediator<T> : IFilterButtonMediator where T : struct, System.Enum
 {
     private readonly T enumValue;
-    private static readonly Color WHITE = Palette.AzureishWhite;
+    private static readonly Color WHITE = Palette.searchWhite;
 
     public GenericIconTextBgSwapMediator(T value) { this.enumValue = value; }
 
