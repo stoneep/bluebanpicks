@@ -9,13 +9,18 @@ public class TacticalRoleFilterBar : DynamicFilterBar<TacticalRole>
         return value.ToSpriteName(); 
     }
     
+    protected override string GetAllButtonSpriteName()
+    {
+        return "tacticalRole_all";
+    }
+    
     protected override IFilterButtonMediator CreateButtonMediator(TacticalRole? value)
     {
         if (!value.HasValue)
         {
-            return FilterButtonMediatorFactory.CreateGrayToggle(Color.white);
+            return FilterButtonMediatorFactory.CreateIconBgColorSwap(CombatTypeColor.TacticalRoleAll);
         }
-        
+    
         return FilterButtonMediatorFactory.CreateGenericIconBgSwap(value.Value);
     }
 }
