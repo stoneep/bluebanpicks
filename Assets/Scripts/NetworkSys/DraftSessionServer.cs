@@ -45,6 +45,15 @@ public class DraftSessionServer : NetworkBehaviour
     public readonly NetworkVariable<ulong> FirstSideClientId = new(ulong.MaxValue);
     public readonly NetworkVariable<ulong> SecondSideClientId = new(ulong.MaxValue);
 
+    /// <summary>
+    /// true면 호스트(ServerClientId)도 선공/후공에 배정될 수 있다 ("2인 연습 모드").
+    /// 기본값 false = 기존 규칙 그대로 "호스트는 항상 관전자".
+    /// 관전자 역할의 3번째 인원 없이, 실제로 대결할 두 사람 중 한 명이 방을 만들고
+    /// 자기 자신도 선공/후공 중 하나로 배정해 바로 시작하고 싶을 때 이 값을 켠다.
+    /// Lobby 상태에서만 변경 가능(HostSetHostCanPlay).
+    /// </summary>
+    public readonly NetworkVariable<bool> HostCanPlay = new(false);
+
     public readonly NetworkVariable<DraftSessionState> State = new(DraftSessionState.Lobby);
 
     [Header("Scene Transition")]
@@ -147,18 +156,49 @@ public class DraftSessionServer : NetworkBehaviour
             Debug.LogError($"[{nameof(DraftSessionServer)}] 선공/후공에 같은 클라이언트를 배정할 수 없습니다.");
             return;
         }
-        if (firstClientId == NetworkManager.ServerClientId || secondClientId == NetworkManager.ServerClientId)
+        if (!HostCanPlay.Value &&
+            (firstClientId == NetworkManager.ServerClientId || secondClientId == NetworkManager.ServerClientId))
         {
-            // 역할 규칙: 호스트(=ServerClientId)는 항상 관전자다. 드래프트 참가자(선공/후공)는
+            // 역할 규칙(기본값): 호스트(=ServerClientId)는 관전자다. 드래프트 참가자(선공/후공)는
             // 반드시 호스트가 아닌 클라이언트여야 한다. 이 체크는 서버 권위 지점이므로
             // 호출부(UI)가 실수로 호스트를 넘기더라도 여기서 최종적으로 막는다.
+            // 단, HostCanPlay가 켜져 있으면("2인 연습 모드") 호스트도 참가자가 될 수 있으므로
+            // 이 방어를 건너뛴다.
             Debug.LogError($"[{nameof(DraftSessionServer)}] 호스트(clientId={NetworkManager.ServerClientId})는 관전자이므로 " +
-                            "선공/후공에 배정할 수 없습니다.");
+                            "선공/후공에 배정할 수 없습니다. (HostCanPlay를 켜면 호스트도 참가 가능)");
             return;
         }
 
         FirstSideClientId.Value = firstClientId;
         SecondSideClientId.Value = secondClientId;
+    }
+
+    /// <summary>
+    /// "2인 연습 모드" 토글. true로 켜면 호스트 자신도 선공/후공 후보에 포함될 수 있다.
+    /// Lobby 상태에서만, 그리고 아직 진영이 배정되지 않았을 때만 바꾸도록 한다
+    /// (진행 중간에 규칙이 바뀌는 걸 막기 위함 - 이미 배정된 뒤에 끄면 참가자 중 하나가
+    /// 갑자기 관전자 취급되는 모순이 생길 수 있다).
+    /// </summary>
+    public void HostSetHostCanPlay(bool value)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostSetHostCanPlay는 서버(호스트)에서만 호출할 수 있습니다.");
+            return;
+        }
+        if (State.Value != DraftSessionState.Lobby)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 이 설정을 바꿀 수 없습니다.");
+            return;
+        }
+        if (FirstSideClientId.Value != ulong.MaxValue || SecondSideClientId.Value != ulong.MaxValue)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 진영이 이미 배정된 후에는 이 설정을 바꿀 수 없습니다. " +
+                              "먼저 진영 배정을 초기화하세요.");
+            return;
+        }
+
+        HostCanPlay.Value = value;
     }
 
     // ==================== 대기실 -> 드래프트 시작 (호스트 전용) ====================
