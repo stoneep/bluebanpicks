@@ -76,6 +76,14 @@ public class DraftSessionServer : NetworkBehaviour
     /// <summary>현재 턴에 남은 제한 시간(초). 턴 타이머가 꺼져있거나 진행 중이 아니면 0.</summary>
     public readonly NetworkVariable<float> TurnSecondsRemaining = new(0f);
 
+    /// <summary>
+    /// true면 PreDraft/턴 타이머가 그 자리에서 멈추고, 밴/픽 제출도 서버에서 거부된다("완전 정지").
+    /// 코루틴 자체를 취소/재시작하지 않고 매 프레임 값 감소만 건너뛰는 방식이라, 해제 시 정확히
+    /// 멈췄던 남은 시간부터 다시 흐른다. 호스트 또는 배정된 참가자(선공/후공)만 토글 가능
+    /// (RequestPauseServerRpc 참고) - 네트워크 문제/분쟁 상황 등을 위한 보험용 기능이다.
+    /// </summary>
+    public readonly NetworkVariable<bool> IsPaused = new(false);
+
     private Coroutine preDraftCountdownRoutine;
     private Coroutine turnTimerRoutine;
 
@@ -273,6 +281,7 @@ public class DraftSessionServer : NetworkBehaviour
     private void BeginPreDraftCountdown()
     {
         State.Value = DraftSessionState.Loading;
+        IsPaused.Value = false; // Loading 진입 시에도 이전 상태가 남아있지 않도록 확실히 초기화
         Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to Loading, " +
                   $"{preDraftLoadBufferSeconds}초 후 자동으로 드래프트를 시작합니다.");
 
@@ -288,13 +297,25 @@ public class DraftSessionServer : NetworkBehaviour
         while (remaining > 0f)
         {
             yield return null;
+
+            // 일시정지 중에는 이번 프레임의 경과 시간을 그냥 버린다 - remaining을 건드리지 않으므로
+            // 코루틴을 취소/재시작하지 않고도 정확히 멈췄던 지점에서 다시 흐르게 된다.
+            if (IsPaused.Value)
+            {
+                Debug.Log($"[PreDraftTimer] paused, skip. remaining={remaining}"); // 임시
+                continue;
+            }
+
             remaining -= Time.deltaTime;
 
             // NetworkVariable은 값이 실제로 바뀔 때만 트래픽을 보내므로, 프레임마다가 아니라
             // 초 단위(올림)로만 갱신해서 불필요한 동기화를 줄인다.
             float rounded = Mathf.Max(0f, Mathf.Ceil(remaining));
             if (!Mathf.Approximately(rounded, PreDraftSecondsRemaining.Value))
+            {
                 PreDraftSecondsRemaining.Value = rounded;
+                Debug.Log($"[PreDraftTimer] tick -> {rounded}"); // 임시
+            }
         }
 
         PreDraftSecondsRemaining.Value = 0f;
@@ -312,6 +333,7 @@ public class DraftSessionServer : NetworkBehaviour
         ruleManager.OnDraftCompleted += HandleServerDraftCompleted;
 
         ActionLog.Clear();
+        IsPaused.Value = false; // 혹시 남아있을 수 있는 이전 상태를 새 드래프트 시작 시 확실히 초기화
         State.Value = DraftSessionState.InProgress;
         Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to InProgress " +
                   $"(session={GetEntityId()}, IsSpawned={NetworkObject.IsSpawned}, " +
@@ -329,6 +351,12 @@ public class DraftSessionServer : NetworkBehaviour
         if (State.Value != DraftSessionState.InProgress || ruleManager == null)
         {
             RejectClientRpc("드래프트가 진행 중이 아닙니다.", ToTarget(senderClientId));
+            return;
+        }
+
+        if (IsPaused.Value)
+        {
+            RejectClientRpc("일시정지 중에는 밴/픽을 제출할 수 없습니다.", ToTarget(senderClientId));
             return;
         }
 
@@ -364,6 +392,40 @@ public class DraftSessionServer : NetworkBehaviour
     [ClientRpc]
     private void RejectClientRpc(string reason, ClientRpcParams rpcParams = default) =>
         OnActionRejected?.Invoke(reason);
+
+    // ==================== 진행 중: 일시정지(보험용 긴급 정지) ====================
+
+    /// <summary>
+    /// 일시정지 상태를 요청한다. pause=true면 정지, false면 해제.
+    /// 호스트(ServerClientId) 또는 이 세션에 배정된 참가자(선공/후공)만 호출할 수 있고,
+    /// 그 외(관전자 등)의 요청은 서버에서 거부한다.
+    /// </summary>
+    [ServerRpc(RequireOwnership = false)]
+    public void RequestPauseServerRpc(bool pause, ServerRpcParams rpcParams = default)
+    {
+        var senderClientId = rpcParams.Receive.SenderClientId;
+
+        if (State.Value != DraftSessionState.Loading && State.Value != DraftSessionState.InProgress)
+        {
+            RejectClientRpc("드래프트 진행 중(로딩 포함)이 아닐 때는 일시정지를 사용할 수 없습니다.", ToTarget(senderClientId));
+            return;
+        }
+
+        bool isHostOrParticipant = senderClientId == NetworkManager.ServerClientId ||
+                                    senderClientId == FirstSideClientId.Value ||
+                                    senderClientId == SecondSideClientId.Value;
+        if (!isHostOrParticipant)
+        {
+            RejectClientRpc("호스트 또는 이 세션의 참가자만 일시정지를 사용할 수 있습니다.", ToTarget(senderClientId));
+            return;
+        }
+
+        if (IsPaused.Value == pause) return; // 이미 같은 상태면 아무것도 하지 않음
+
+        IsPaused.Value = pause;
+        Debug.Log($"[{nameof(DraftSessionServer)}] IsPaused set to {pause} (요청자 clientId={senderClientId}) " +
+                  $"@ frame {Time.frameCount}");
+    }
 
     // ==================== 서버 내부: RuleManager 이벤트 -> 동기화 데이터 반영 ====================
 
@@ -429,6 +491,10 @@ public class DraftSessionServer : NetworkBehaviour
         while (remaining > 0f)
         {
             yield return null;
+
+            // PreDraftCountdownRoutine과 동일한 방식: 일시정지 중엔 경과 시간을 버려서 그 자리에서 멈춘다.
+            if (IsPaused.Value) continue;
+
             remaining -= Time.deltaTime;
 
             float rounded = Mathf.Max(0f, Mathf.Ceil(remaining));
