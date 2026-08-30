@@ -71,6 +71,7 @@ public class DraftBoardController : MonoBehaviour
             return result;
         }
     }
+    
     public DraftSide? CurrentSide => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentSide.Value : null;
     public string CurrentPhaseName => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentPhaseName.Value.ToString() : null;
 

@@ -76,6 +76,21 @@ public class DraftSessionServer : NetworkBehaviour
     public readonly NetworkVariable<DraftSide> CurrentSide = new();
     public readonly NetworkList<NetworkDraftAction> ActionLog = new();
 
+    /// <summary>
+    /// 이 로컬 클라이언트가 배정된 진영. 참가자가 아니거나(관전자/호스트) 
+    /// 아직 배정되지 않았다면 null.
+    /// </summary>
+    public DraftSide? LocalSide
+    {
+        get
+        {
+            ulong localId = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : ulong.MaxValue;
+            if (localId == FirstSideClientId.Value) return DraftSide.First;
+            if (localId == SecondSideClientId.Value) return DraftSide.Second;
+            return null;
+        }
+    }
+    
     /// <summary>액션 거부 사유. 요청을 보낸 클라이언트에게만 전달된다 (전체 브로드캐스트 아님).</summary>
     public event Action<string> OnActionRejected;
 
@@ -325,6 +340,7 @@ public class DraftSessionServer : NetworkBehaviour
         // 다시 시작한다. 페이즈가 끝났다면 곧이어 HandleServerPhaseChanged가 호출되므로 거기서 시작한다.
         if (ruleManager != null && ruleManager.CurrentPhase != null && !ruleManager.CurrentPhase.IsComplete)
         {
+            CurrentSide.Value = ruleManager.CurrentPhase.CurrentSide; // 같은 페이즈 내 턴 교대도 반영
             RestartTurnTimer();
         }
     }
