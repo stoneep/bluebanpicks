@@ -21,6 +21,7 @@ public static class CharDatabaseLoader
 
     private static readonly List<string> _cachedIds = new();
     private static readonly Dictionary<string, string> _baseIdMap = new();
+    private static readonly Dictionary<string, CharacterViewData> _viewDataCache = new();
     public static GameLanguage CurrentLanguage { get; private set; } = GameLanguage.English;
     
     /// <summary> 로드된 전체 캐릭터 Id 목록 </summary>
@@ -46,6 +47,24 @@ public static class CharDatabaseLoader
         return string.Equals(GetBaseId(idA), GetBaseId(idB), StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Id로 전체 CharacterViewData를 조회. 밴픽 결과창처럼 "id만 갖고 있는" 코드에서
+    /// 이름/초상화 정보를 되찾을 때 사용한다. LoadFromJson 이후에만 채워진다.
+    /// </summary>
+    public static bool TryGetViewData(string id, out CharacterViewData data)
+    {
+        if (string.IsNullOrEmpty(id))
+        {
+            data = default;
+            return false;
+        }
+        return _viewDataCache.TryGetValue(id, out data);
+    }
+
+    /// <summary>Id에 대응하는 표시명(현재 언어 기준). 캐시에 없으면 id 자체를 그대로 반환한다.</summary>
+    public static string GetDisplayName(string id) =>
+        TryGetViewData(id, out var data) ? data.DisplayName : id;
+
     // ════════════════════════════════════════
     // Public API
     // ════════════════════════════════════════
@@ -69,6 +88,7 @@ public static class CharDatabaseLoader
 
         // 캐시 구축
         RebuildCache(entries);
+        RebuildViewDataCache(result);
 
         return result;
     }
@@ -93,6 +113,16 @@ public static class CharDatabaseLoader
         }
 
 //        Debug.Log($"[CharDB] 캐시 구축 완료 (Ids: {_cachedIds.Count}, BaseId 매핑: {_baseIdMap.Count})");
+    }
+
+    private static void RebuildViewDataCache(List<CharacterViewData> data)
+    {
+        _viewDataCache.Clear();
+        foreach (var d in data)
+        {
+            if (string.IsNullOrWhiteSpace(d.Id)) continue;
+            _viewDataCache[d.Id] = d;
+        }
     }
 
     // ════════════════════════════════════════
