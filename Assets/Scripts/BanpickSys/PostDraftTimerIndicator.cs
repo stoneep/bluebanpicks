@@ -14,16 +14,13 @@ using UnityEngine;
 public sealed class PostDraftTimerIndicator : DraftTimerIndicatorBase
 {
     [Header("Post-Draft")] 
-    [Tooltip("PostDraftDisplaySeconds(대기실에서 설정한 값)가 0보다 클 때 쓰는 카운트다운 문구. {0}=남은 시간(mm:ss 또는 mm:ss.ff).")] 
+    [Tooltip("PostDraftDisplaySeconds(대기실에서 설정한 값)가 0보다 클 때 쓰는 카운트다운 문구. {0}=남은 시간(mm:ss).")] 
     [SerializeField] private string countdownFormat = "밴픽 종료 ({0} 후)";
 
-    [Tooltip("PostDraftDisplaySeconds가 0 이하일 때(카운트다운 미사용) 쓰는 경과 시간 문구. {0}=경과 시간(mm:ss 또는 mm:ss.ff).")]
+    [Tooltip("PostDraftDisplaySeconds가 0 이하일 때(카운트다운 미사용) 쓰는 경과 시간 문구. {0}=경과 시간(mm:ss).")]
     [SerializeField] private string elapsedFormat = "밴픽 종료 ({0} 경과)";
     
     [Header("Timer Format")] 
-    [Tooltip("mm:ss 뒤에 소수 둘째 자리(센티초)까지 붙일지 여부. 5분 안팎의 타이머를 스톱워치처럼 보여주고 싶을 때 켠다.")]
-    [SerializeField] private bool showFraction = true;
-    
     [Tooltip("시(hh) 단위까지 표시할지 여부. 대부분의 밴픽 종료 타이머는 5분 내외라 꺼두는 게 자연스럽다.")] 
     [SerializeField] private bool showHours = false;
     
@@ -86,10 +83,8 @@ public sealed class PostDraftTimerIndicator : DraftTimerIndicatorBase
     }
     
     /// <summary>
-    /// 초 단위 float를 "mm:ss" 또는 "mm:ss.ff"(센티초 포함) 문자열로 바꾼다.
-    /// showHours가 켜져 있으면 "hh:mm:ss(.ff)"까지 확장된다.
-    /// 카운트다운(남은 시간)에서 반올림으로 인해 0:00 이후 다시 소수가 보이는 걸 막기 위해
-    /// 음수는 0으로 클램프한다.
+    /// 초 단위 float를 "mm:ss" 문자열로 바꾼다.
+    /// showHours가 켜져 있으면 "hh:mm:ss"까지 확장된다.
     /// </summary>
     private string FormatTime(float seconds)
     {
@@ -100,13 +95,8 @@ public sealed class PostDraftTimerIndicator : DraftTimerIndicatorBase
         int minutes = (totalWhole % 3600) / 60;
         int secs = totalWhole % 60;
 
-        string body = showHours
+        return showHours
             ? $"{hours:00}:{minutes:00}:{secs:00}"
             : $"{minutes:00}:{secs:00}";
-
-        if (!showFraction) return body;
-
-        int centiseconds = Mathf.FloorToInt((seconds - totalWhole) * 100f);
-        return $"{body}.{centiseconds:00}";
     }
 }
