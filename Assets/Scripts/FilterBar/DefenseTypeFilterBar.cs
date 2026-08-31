@@ -14,6 +14,7 @@ public class DefenseTypeFilterBar : DynamicFilterBar<DefenseType>
             return FilterButtonMediatorFactory.CreateTextBgSwap(Palette.DeepBlue);
         }
         
-        return FilterButtonMediatorFactory.CreateGenericIconBgSwap(value.Value);
+        //return FilterButtonMediatorFactory.CreateGenericIconBgSwap(value.Value);
+        return FilterButtonMediatorFactory.CreateIconBgColorSwap(value.Value.GetThemeColor());
     }
 }

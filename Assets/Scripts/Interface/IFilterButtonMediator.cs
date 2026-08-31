@@ -306,6 +306,8 @@ public class GenericIconBgSwapMediator<T> : IFilterButtonMediator where T : stru
 
     private Color GetThemeColorDynamic()
     {
+        Debug.Log($"[GenericIconBgSwap] type={enumValue.GetType().Name}, value={enumValue}");
+        
         if (enumValue is TacticalRole role)
             return role.GetThemeColor();
 

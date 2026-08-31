@@ -23,7 +23,7 @@ public static class AtlasAddressConfig
     public const string COMBAT = "atlas/icon_combat";               // Role, TacticalRole
     
     // ===== 아이템 아틀라스 =====
-    public const string ITEM_COMMON = "atlas/icon_common";          
+    //public const string ITEM_COMMON = "atlas/icon_common";          
     // 공통: 화폐(Currency), 레어리티 배경(frame_rarity_*), 
     //       Report, 탭 아이콘(tab_*), EventCurrency
     
@@ -42,7 +42,7 @@ public static class AtlasAddressConfig
             COMBAT_TYPE,
             
             // 아이템
-            ITEM_COMMON
+            //ITEM_COMMON
         };
     }
     
@@ -56,7 +56,7 @@ public static class AtlasAddressConfig
             AFFILIATION,
             COMBAT,
             COMBAT_TYPE,
-            ITEM_COMMON
+            //ITEM_COMMON
         };
     }
 }
