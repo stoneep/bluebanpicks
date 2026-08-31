@@ -159,7 +159,36 @@ public class DraftSessionServer : NetworkBehaviour
 
         Debug.Log($"[{nameof(DraftSessionServer)}] OnNetworkSpawn (session={GetEntityId()}, " +
                   $"scene={gameObject.scene.name}) @ frame {Time.frameCount}");
-        OnSessionReady?.Invoke(this);
+        RaiseSessionReadySafely();
+    }
+
+    /// <summary>
+    /// OnSessionReady 구독자 중 하나가 예외를 던지면, 일반 멀티캐스트 delegate 호출(?.Invoke)은
+    /// 나머지 구독자 호출을 건너뛰고 예외를 그대로 호출자(OnNetworkSpawn → NetworkObject.Spawn())
+    /// 위로 전파시킨다. 그러면 Spawn()을 호출한 DraftSessionBootstrap.SpawnSession()의
+    /// 이후 코드(스폰 완료 로그, 대기실 씬 전환)까지 통째로 실행되지 않는다.
+    /// 구독자 하나의 버그가 씬 전환 같은 핵심 흐름을 막지 않도록, 각 구독자를 개별적으로
+    /// try/catch로 감싸서 호출한다.
+    /// </summary>
+    private void RaiseSessionReadySafely()
+    {
+        var handler = OnSessionReady;
+        if (handler == null) return;
+
+        foreach (var d in handler.GetInvocationList())
+        {
+            var action = (Action<DraftSessionServer>)d;
+            try
+            {
+                action(this);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[{nameof(DraftSessionServer)}] OnSessionReady 구독자({action.Target}) 처리 중 예외 발생. " +
+                                "이 구독자는 건너뛰고 나머지 초기화(씬 전환 포함)는 계속 진행합니다.");
+                Debug.LogException(e);
+            }
+        }
     }
 
     public override void OnNetworkDespawn()

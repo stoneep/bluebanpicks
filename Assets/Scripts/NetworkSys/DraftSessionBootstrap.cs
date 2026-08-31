@@ -1,3 +1,4 @@
+using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -43,7 +44,7 @@ public class DraftSessionBootstrap : MonoBehaviour
 
     private void OnEnable()
     {
-//        Debug.Log($"[{nameof(DraftSessionBootstrap)}] OnEnable, this={GetEntityId()} @ frame {Time.frameCount}");
+        Debug.Log($"[{nameof(DraftSessionBootstrap)}] OnEnable, this={GetEntityId()} @ frame {Time.frameCount}");
         networkManager.OnServerStarted += HandleServerStarted;
         networkManager.OnServerStopped += HandleServerStopped;
     }
@@ -60,8 +61,8 @@ public class DraftSessionBootstrap : MonoBehaviour
     /// </summary>
     private void HandleServerStarted()
     {
-//        Debug.Log($"[{nameof(DraftSessionBootstrap)}] HandleServerStarted called, " +
-    //              $"this={GetEntityId()} @ frame {Time.frameCount}");
+        Debug.Log($"[{nameof(DraftSessionBootstrap)}] HandleServerStarted called, " +
+                  $"this={GetEntityId()} @ frame {Time.frameCount}");
         if (!networkManager.IsServer) return;
         SpawnSession();
     }
@@ -70,13 +71,13 @@ public class DraftSessionBootstrap : MonoBehaviour
     {
         if (DraftSessionServer.Instance != null)
         {
- //           Debug.LogWarning($"[{nameof(DraftSessionBootstrap)}] 세션이 이미 스폰되어 있습니다. 중복 스폰을 건너뜁니다.");
+            Debug.LogWarning($"[{nameof(DraftSessionBootstrap)}] 세션이 이미 스폰되어 있습니다. 중복 스폰을 건너뜁니다.");
             return;
         }
 
         if (sessionPrefab == null)
         {
-  //          Debug.LogError($"[{nameof(DraftSessionBootstrap)}] sessionPrefab이 할당되지 않았습니다. 인스펙터에서 연결하세요.");
+            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] sessionPrefab이 할당되지 않았습니다. 인스펙터에서 연결하세요.");
             return;
         }
 
@@ -87,14 +88,14 @@ public class DraftSessionBootstrap : MonoBehaviour
 
         if (networkObject == null)
         {
-   //         Debug.LogError($"[{nameof(DraftSessionBootstrap)}] sessionPrefab에 NetworkObject 컴포넌트가 없습니다.");
+            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] sessionPrefab에 NetworkObject 컴포넌트가 없습니다.");
             Destroy(instance.gameObject);
             return;
         }
 
         // 소유권을 지정하지 않으면 서버가 기본 소유자가 된다 (호스트 권위형 설계와 일치).
         networkObject.Spawn();
- //       Debug.Log($"[{nameof(DraftSessionBootstrap)}] DraftSessionServer 스폰 완료.");
+        Debug.Log($"[{nameof(DraftSessionBootstrap)}] DraftSessionServer 스폰 완료.");
 
         LoadLobbySceneIfConfigured();
     }
@@ -113,19 +114,56 @@ public class DraftSessionBootstrap : MonoBehaviour
             return; // 씬을 안 나눈 기존 프로젝트 구성과 호환되도록, 비워두면 아무 것도 하지 않는다.
         }
 
+        // OnServerStarted 콜백이 도는 그 프레임엔 NetworkManager 내부적으로
+        // 호스트 자신의 연결 승인/초기화가 아직 다 끝나지 않았을 수 있다.
+        // 그 상태에서 곧바로 LoadScene()을 걸면 내부 타이밍에 따라 간헐적으로
+        // 씬 이벤트가 조용히 어긋나는 경우가 있어, 한 프레임 미뤄서 상태가
+        // 안정된 뒤에 호출한다.
+        StartCoroutine(LoadLobbySceneNextFrame());
+    }
+
+    private IEnumerator LoadLobbySceneNextFrame()
+    {
+        yield return null;
+
         var sceneManager = networkManager.SceneManager;
         if (sceneManager == null)
         {
-  //          Debug.LogError($"[{nameof(DraftSessionBootstrap)}] NetworkManager의 Scene Management가 꺼져 있어 " +
- //                           "대기실 씬으로 전환할 수 없습니다. 인스펙터에서 Enable Scene Management를 켜주세요.");
-            return;
+            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] NetworkManager의 Scene Management가 꺼져 있어 " +
+                            "대기실 씬으로 전환할 수 없습니다. 인스펙터에서 Enable Scene Management를 켜주세요.");
+            yield break;
         }
 
+        // 완료 여부를 실제로 추적한다. LoadScene()이 Started를 반환해도 그건 "접수됐다"는
+        // 뜻일 뿐 "끝까지 완료됐다"는 보장이 아니므로, 이 이벤트로 실제 완료/실패를 확인한다.
+        sceneManager.OnLoadEventCompleted += HandleLobbyLoadEventCompleted;
+
         var status = sceneManager.LoadScene(lobbySceneName, LoadSceneMode.Single);
+        Debug.Log($"[{nameof(DraftSessionBootstrap)}] LoadScene('{lobbySceneName}') 요청, status={status} @ frame {Time.frameCount}");
+
         if (status != SceneEventProgressStatus.Started)
         {
-    //        Debug.LogError($"[{nameof(DraftSessionBootstrap)}] 대기실 씬 전환을 시작하지 못했습니다: {status}. " +
-    //                        $"씬 '{lobbySceneName}'이 Build Settings에 등록되어 있는지 확인하세요.");
+            sceneManager.OnLoadEventCompleted -= HandleLobbyLoadEventCompleted;
+            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] 대기실 씬 전환을 시작하지 못했습니다: {status}. " +
+                            $"씬 '{lobbySceneName}'이 Build Settings에 등록되어 있는지 확인하세요.");
+        }
+    }
+
+    private void HandleLobbyLoadEventCompleted(string sceneName, LoadSceneMode mode,
+        System.Collections.Generic.List<ulong> clientsCompleted, System.Collections.Generic.List<ulong> clientsTimedOut)
+    {
+        networkManager.SceneManager.OnLoadEventCompleted -= HandleLobbyLoadEventCompleted;
+
+        if (clientsTimedOut != null && clientsTimedOut.Count > 0)
+        {
+            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] '{sceneName}' 씬 로드가 일부 클라이언트에서 " +
+                            $"타임아웃됐습니다. timedOut=[{string.Join(",", clientsTimedOut)}], " +
+                            $"completed=[{string.Join(",", clientsCompleted)}]");
+        }
+        else
+        {
+            Debug.Log($"[{nameof(DraftSessionBootstrap)}] '{sceneName}' 씬 로드 완료. " +
+                       $"completed=[{string.Join(",", clientsCompleted)}]");
         }
     }
 

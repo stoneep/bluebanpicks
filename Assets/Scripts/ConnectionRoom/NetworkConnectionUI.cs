@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
@@ -44,15 +45,71 @@ public class NetworkConnectionUI : MonoBehaviour
         joinRoomButton.onClick.AddListener(HandleJoinRoom);
     }
 
+    private bool subscribed;
+    private Coroutine waitForSingletonRoutine;
+
+    // NetworkManager.Awake()가 이 스크립트의 Start()보다 늦게 도는 경우가 실제로 존재한다
+    // (DontDestroyOnLoad로 살아남은 오브젝트의 파괴/재생성 타이밍, Domain Reload 비활성화 설정 등).
+    // 그래서 "한 번만 찾고 실패하면 끝"이 아니라, 나타날 때까지 짧게 재시도한다.
+    private const float SingletonPollInterval = 0.1f;
+    private const float SingletonPollTimeout = 5f;
+
+    private void Start()
+    {
+        TryBindNetworkManager();
+    }
+
     private void OnEnable()
     {
+        // 이미 한 번 바인딩된 상태에서 다시 켜졌을 수 있으니(예: 씬 재진입) 재시도.
+        if (!subscribed) TryBindNetworkManager();
+    }
+
+    private void TryBindNetworkManager()
+    {
+        if (subscribed) return;
+
         networkManager = NetworkManager.Singleton;
         if (networkManager == null)
         {
-            Debug.LogError($"[{nameof(NetworkConnectionUI)}] NetworkManager.Singleton이 없습니다. 씬에 배치되어 있는지 확인하세요.");
+            // 곧바로 에러를 찍지 않고, 잠깐 폴링하며 기다린다. 그래도 안 나타나면 그때 에러 처리.
+            if (waitForSingletonRoutine == null)
+            {
+                waitForSingletonRoutine = StartCoroutine(WaitForSingletonThenBind());
+            }
             return;
         }
 
+        BindTo(networkManager);
+    }
+
+    private IEnumerator WaitForSingletonThenBind()
+    {
+        float elapsed = 0f;
+        while (NetworkManager.Singleton == null)
+        {
+            if (elapsed >= SingletonPollTimeout)
+            {
+                Debug.LogError($"[{nameof(NetworkConnectionUI)}] {SingletonPollTimeout}초 동안 NetworkManager.Singleton이 없습니다. " +
+                                "씬에 배치되어 있는지, Build Settings에 해당 씬이 포함되어 있는지, " +
+                                "NetworkManager 오브젝트가 활성화 상태인지 확인하세요.");
+                waitForSingletonRoutine = null;
+                yield break;
+            }
+
+            yield return new WaitForSeconds(SingletonPollInterval);
+            elapsed += SingletonPollInterval;
+        }
+
+        waitForSingletonRoutine = null;
+        BindTo(NetworkManager.Singleton);
+    }
+
+    private void BindTo(NetworkManager manager)
+    {
+        if (subscribed) return;
+
+        networkManager = manager;
         roomAccess = networkManager.GetComponent<RoomAccessController>();
         relayService = networkManager.GetComponent<RelayRoomService>();
 
@@ -71,17 +128,26 @@ public class NetworkConnectionUI : MonoBehaviour
         networkManager.OnServerStarted += RefreshStatus;
         networkManager.OnClientConnectedCallback += HandleClientConnected;
         networkManager.OnClientDisconnectCallback += HandleClientDisconnected;
+        subscribed = true;
+
         RefreshStatus();
         SetRoomCodeDisplay(string.Empty);
     }
 
     private void OnDisable()
     {
-        if (networkManager == null) return;
+        if (waitForSingletonRoutine != null)
+        {
+            StopCoroutine(waitForSingletonRoutine);
+            waitForSingletonRoutine = null;
+        }
+
+        if (networkManager == null || !subscribed) return;
 
         networkManager.OnServerStarted -= RefreshStatus;
         networkManager.OnClientConnectedCallback -= HandleClientConnected;
         networkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
+        subscribed = false;
     }
 
     // ==================== 방 만들기 (Host) ====================
