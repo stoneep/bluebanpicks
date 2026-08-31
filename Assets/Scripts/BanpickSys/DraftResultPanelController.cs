@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -26,6 +27,15 @@ public sealed class DraftResultPanelController : MonoBehaviour
     [SerializeField] private DraftResultRowView rowPrefab;
     [Tooltip("VerticalLayoutGroup 등이 붙은, 행들이 순서대로 쌓일 컨텐츠 루트 (ScrollRect Content 등).")]
     [SerializeField] private Transform rowContainer;
+
+    [Header("Picked Characters (하단 좌/우 요약)")]
+    [Tooltip("왼쪽에 보여줄 진영의 픽 슬롯 바. 참가자 시점엔 '나', 관전자 시점엔 '선공'이 배정된다. " +
+             "PickSlotBar의 SlotCount를 6으로 설정해둘 것.")]
+    [SerializeField] private PickSlotBar leftPickSlotBar;
+    [SerializeField] private TMP_Text leftSideLabel;
+    [Tooltip("오른쪽에 보여줄 진영의 픽 슬롯 바. 참가자 시점엔 '상대', 관전자 시점엔 '후공'이 배정된다.")]
+    [SerializeField] private PickSlotBar rightPickSlotBar;
+    [SerializeField] private TMP_Text rightSideLabel;
 
     private readonly List<DraftResultRowView> rows = new();
     private bool isBuilt;
@@ -159,7 +169,17 @@ public sealed class DraftResultPanelController : MonoBehaviour
         }
 
         var localSide = session.LocalSide;
+
+        // 좌측 = 참가자 시점엔 '나', 관전자 시점엔 '선공'. 우측은 그 반대 진영.
+        var leftSide = localSide ?? DraftSide.First;
+        var rightSide = leftSide == DraftSide.First ? DraftSide.Second : DraftSide.First;
+
+        if (leftSideLabel) leftSideLabel.text = ResolveSideLabel(leftSide, localSide);
+        if (rightSideLabel) rightSideLabel.text = ResolveSideLabel(rightSide, localSide);
+
         int order = 1;
+        int leftPickIndex = 0;
+        int rightPickIndex = 0;
 
         // ActionLog는 서버가 밴/픽이 확정될 때마다 순서대로 Add해온 기록이라,
         // 여기서 그냥 처음부터 순회하는 것만으로 "실제 진행 순서"가 그대로 보장된다.
@@ -171,6 +191,20 @@ public sealed class DraftResultPanelController : MonoBehaviour
                       ResolveSideLabel(action.side, localSide));
             rows.Add(row);
             order++;
+
+            // 밴은 결과 로그에만 남기고, 하단 요약에는 실제 픽한 캐릭터만 좌/우 6칸씩 채운다.
+            if (action.resultType != DraftResultType.Pick) continue;
+
+            if (action.side == leftSide)
+            {
+                if (leftPickSlotBar) leftPickSlotBar.SetCharacter(leftPickIndex, action.characterId.ToString());
+                leftPickIndex++;
+            }
+            else
+            {
+                if (rightPickSlotBar) rightPickSlotBar.SetCharacter(rightPickIndex, action.characterId.ToString());
+                rightPickIndex++;
+            }
         }
     }
 
@@ -193,6 +227,9 @@ public sealed class DraftResultPanelController : MonoBehaviour
             if (row) Destroy(row.gameObject);
         }
         rows.Clear();
+
+        if (leftPickSlotBar) leftPickSlotBar.ClearAll();
+        if (rightPickSlotBar) rightPickSlotBar.ClearAll();
     }
 
     private void SetVisible(bool visible)

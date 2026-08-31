@@ -43,7 +43,7 @@ public class DraftSessionBootstrap : MonoBehaviour
 
     private void OnEnable()
     {
-        Debug.Log($"[{nameof(DraftSessionBootstrap)}] OnEnable, this={GetEntityId()} @ frame {Time.frameCount}");
+//        Debug.Log($"[{nameof(DraftSessionBootstrap)}] OnEnable, this={GetEntityId()} @ frame {Time.frameCount}");
         networkManager.OnServerStarted += HandleServerStarted;
         networkManager.OnServerStopped += HandleServerStopped;
     }
@@ -60,8 +60,8 @@ public class DraftSessionBootstrap : MonoBehaviour
     /// </summary>
     private void HandleServerStarted()
     {
-        Debug.Log($"[{nameof(DraftSessionBootstrap)}] HandleServerStarted called, " +
-                  $"this={GetEntityId()} @ frame {Time.frameCount}");
+//        Debug.Log($"[{nameof(DraftSessionBootstrap)}] HandleServerStarted called, " +
+    //              $"this={GetEntityId()} @ frame {Time.frameCount}");
         if (!networkManager.IsServer) return;
         SpawnSession();
     }
@@ -70,13 +70,13 @@ public class DraftSessionBootstrap : MonoBehaviour
     {
         if (DraftSessionServer.Instance != null)
         {
-            Debug.LogWarning($"[{nameof(DraftSessionBootstrap)}] 세션이 이미 스폰되어 있습니다. 중복 스폰을 건너뜁니다.");
+ //           Debug.LogWarning($"[{nameof(DraftSessionBootstrap)}] 세션이 이미 스폰되어 있습니다. 중복 스폰을 건너뜁니다.");
             return;
         }
 
         if (sessionPrefab == null)
         {
-            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] sessionPrefab이 할당되지 않았습니다. 인스펙터에서 연결하세요.");
+  //          Debug.LogError($"[{nameof(DraftSessionBootstrap)}] sessionPrefab이 할당되지 않았습니다. 인스펙터에서 연결하세요.");
             return;
         }
 
@@ -87,14 +87,14 @@ public class DraftSessionBootstrap : MonoBehaviour
 
         if (networkObject == null)
         {
-            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] sessionPrefab에 NetworkObject 컴포넌트가 없습니다.");
+   //         Debug.LogError($"[{nameof(DraftSessionBootstrap)}] sessionPrefab에 NetworkObject 컴포넌트가 없습니다.");
             Destroy(instance.gameObject);
             return;
         }
 
         // 소유권을 지정하지 않으면 서버가 기본 소유자가 된다 (호스트 권위형 설계와 일치).
         networkObject.Spawn();
-        Debug.Log($"[{nameof(DraftSessionBootstrap)}] DraftSessionServer 스폰 완료.");
+ //       Debug.Log($"[{nameof(DraftSessionBootstrap)}] DraftSessionServer 스폰 완료.");
 
         LoadLobbySceneIfConfigured();
     }
@@ -116,16 +116,16 @@ public class DraftSessionBootstrap : MonoBehaviour
         var sceneManager = networkManager.SceneManager;
         if (sceneManager == null)
         {
-            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] NetworkManager의 Scene Management가 꺼져 있어 " +
-                            "대기실 씬으로 전환할 수 없습니다. 인스펙터에서 Enable Scene Management를 켜주세요.");
+  //          Debug.LogError($"[{nameof(DraftSessionBootstrap)}] NetworkManager의 Scene Management가 꺼져 있어 " +
+ //                           "대기실 씬으로 전환할 수 없습니다. 인스펙터에서 Enable Scene Management를 켜주세요.");
             return;
         }
 
         var status = sceneManager.LoadScene(lobbySceneName, LoadSceneMode.Single);
         if (status != SceneEventProgressStatus.Started)
         {
-            Debug.LogError($"[{nameof(DraftSessionBootstrap)}] 대기실 씬 전환을 시작하지 못했습니다: {status}. " +
-                            $"씬 '{lobbySceneName}'이 Build Settings에 등록되어 있는지 확인하세요.");
+    //        Debug.LogError($"[{nameof(DraftSessionBootstrap)}] 대기실 씬 전환을 시작하지 못했습니다: {status}. " +
+    //                        $"씬 '{lobbySceneName}'이 Build Settings에 등록되어 있는지 확인하세요.");
         }
     }
 

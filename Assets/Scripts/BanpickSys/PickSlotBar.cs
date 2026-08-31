@@ -95,6 +95,7 @@ public sealed class PickSlotBar : MonoBehaviour
 
     public void SetCharacter(int index, string characterId)
     {
+        SafeInitialize(); // root가 비활성 상태라 Awake()가 아직 안 돌았을 수 있으므로 여기서도 보장
         if (!IsValidIndex(index)) return;
         slots[index].Show(characterId);
     }
@@ -103,12 +104,14 @@ public sealed class PickSlotBar : MonoBehaviour
 
     public void ClearSlot(int index)
     {
+        SafeInitialize();
         if (!IsValidIndex(index)) return;
         slots[index].Clear();
     }
 
     public void ClearAll()
     {
+        SafeInitialize();
         foreach (var s in slots) s.Clear();
     }
 
