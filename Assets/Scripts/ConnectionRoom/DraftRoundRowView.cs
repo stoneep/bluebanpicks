@@ -27,13 +27,17 @@ public class DraftRoundRowView : MonoBehaviour
     [SerializeField] private TMP_InputField preDraftLoadBufferField;
     [Tooltip("DraftSessionServer.TurnTimeLimitSeconds. 밴/픽 각 턴의 제한 시간(초). 0 이하면 턴 타이머 없음.")]
     [SerializeField] private TMP_InputField turnTimeLimitField;
+    [Tooltip("DraftSessionServer.PostDraftDisplaySeconds. 밴/픽 종료 후 안내 카운트다운 시간(초). " +
+             "0 이하면 카운트다운 대신 종료 시점부터의 경과 시간을 보여준다.")]
+    [SerializeField] private TMP_InputField postDraftDisplayField;
 
     /// <summary>라운드 필드(슬롯 수/패턴 등) 값이 바뀌었을 때 (호스트만 구독해서 서버에 반영하면 됨).</summary>
     public event Action OnEdited;
 
     /// <summary>
-    /// 타이머 필드(preDraftLoadBuffer/turnTimeLimit) 값이 바뀌었을 때. 세션 전체 공통값이므로
-    /// OnEdited와 분리했다 - 이 이벤트는 DraftFormatData가 아니라 DraftSessionServer.HostSetTimerSettings로 보내야 한다.
+    /// 타이머 필드(preDraftLoadBuffer/turnTimeLimit/postDraftDisplay) 값이 바뀌었을 때. 세션 전체
+    /// 공통값이므로 OnEdited와 분리했다 - 이 이벤트는 DraftFormatData가 아니라
+    /// DraftSessionServer.HostSetTimerSettings로 보내야 한다.
     /// </summary>
     public event Action OnTimerEdited;
 
@@ -57,6 +61,7 @@ public class DraftRoundRowView : MonoBehaviour
 
         if (preDraftLoadBufferField != null) preDraftLoadBufferField.onEndEdit.AddListener(_ => RaiseTimerEdited());
         if (turnTimeLimitField != null) turnTimeLimitField.onEndEdit.AddListener(_ => RaiseTimerEdited());
+        if (postDraftDisplayField != null) postDraftDisplayField.onEndEdit.AddListener(_ => RaiseTimerEdited());
     }
 
     public void SetInteractable(bool interactable)
@@ -73,6 +78,7 @@ public class DraftRoundRowView : MonoBehaviour
 
         if (preDraftLoadBufferField != null) preDraftLoadBufferField.interactable = interactable;
         if (turnTimeLimitField != null) turnTimeLimitField.interactable = interactable;
+        if (postDraftDisplayField != null) postDraftDisplayField.interactable = interactable;
     }
 
     /// <summary>서버 값으로 UI를 채운다. 이 중에는 OnEdited가 발화하지 않는다.</summary>
@@ -97,20 +103,22 @@ public class DraftRoundRowView : MonoBehaviour
     /// 라운드별 값이 아니라 세션 전체 값이므로, 여러 행을 동시에 이 값으로 채워도 문제없다
     /// (DraftLobbyController가 모든 행에 동일한 값을 넣어준다).
     /// </summary>
-    public void BindTimers(float preDraftLoadBufferSeconds, float turnTimeLimitSeconds)
+    public void BindTimers(float preDraftLoadBufferSeconds, float turnTimeLimitSeconds, float postDraftDisplaySeconds)
     {
         suppressTimerEvents = true;
 
         if (preDraftLoadBufferField != null) preDraftLoadBufferField.text = FormatSeconds(preDraftLoadBufferSeconds);
         if (turnTimeLimitField != null) turnTimeLimitField.text = FormatSeconds(turnTimeLimitSeconds);
+        if (postDraftDisplayField != null) postDraftDisplayField.text = FormatSeconds(postDraftDisplaySeconds);
 
         suppressTimerEvents = false;
     }
 
     /// <summary>지금 UI에 입력된 타이머 값을 읽어온다 (DraftSessionServer.HostSetTimerSettings에 보낼 때 사용).</summary>
-    public (float preDraftLoadBufferSeconds, float turnTimeLimitSeconds) ReadTimerValues() => (
+    public (float preDraftLoadBufferSeconds, float turnTimeLimitSeconds, float postDraftDisplaySeconds) ReadTimerValues() => (
         ParseNonNegativeFloat(preDraftLoadBufferField != null ? preDraftLoadBufferField.text : null),
-        ParseNonNegativeFloat(turnTimeLimitField != null ? turnTimeLimitField.text : null));
+        ParseNonNegativeFloat(turnTimeLimitField != null ? turnTimeLimitField.text : null),
+        ParseNonNegativeFloat(postDraftDisplayField != null ? postDraftDisplayField.text : null));
 
     /// <summary>지금 UI에 입력된 값을 DraftRoundConfig로 읽어온다 (서버에 보낼 때 사용).</summary>
     public DraftRoundConfig ReadValue() => new DraftRoundConfig(

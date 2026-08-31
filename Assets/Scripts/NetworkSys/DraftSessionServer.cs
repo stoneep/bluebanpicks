@@ -70,6 +70,12 @@ public class DraftSessionServer : NetworkBehaviour
              "남아있는 캐릭터 중 하나를 자동으로 대신 선택한다. 0 이하로 두면 턴 타이머를 쓰지 않는다.")]
     [SerializeField] private float defaultTurnTimeLimitSeconds = 30f;
 
+    [Tooltip("밴/픽이 모두 끝난(Completed) 직후 보여줄 서버 권위 카운트다운 시간(초). " +
+             "0보다 크면 PostDraftSecondsRemaining이 이 값에서 0까지 카운트다운된다(모든 클라이언트 동일). " +
+             "0 이하로 두면 카운트다운을 쓰지 않고, PostDraftTimerIndicator가 대신 종료 시점부터의 " +
+             "경과 시간을 각자 로컬로 세어 보여준다(기존 방식).")]
+    [SerializeField] private float defaultPostDraftDisplaySeconds = 10f;
+
     /// <summary>
     /// 실제로 쓰이는 preDraftLoadBufferSeconds 값. 인스펙터 기본값(defaultPreDraftLoadBufferSeconds)으로
     /// OnNetworkSpawn 때 초기화되고, 이후 대기실(Lobby)에서 HostSetTimerSettings로 바꿀 수 있다.
@@ -80,11 +86,25 @@ public class DraftSessionServer : NetworkBehaviour
     /// <summary>실제로 쓰이는 turnTimeLimitSeconds 값. PreDraftLoadBufferSeconds와 동일한 방식.</summary>
     public readonly NetworkVariable<float> TurnTimeLimitSeconds = new(30f);
 
+    /// <summary>
+    /// 실제로 쓰이는 postDraftDisplaySeconds 값. PreDraftLoadBufferSeconds와 동일한 방식으로
+    /// OnNetworkSpawn 때 defaultPostDraftDisplaySeconds로 초기화되고, 이후 대기실에서
+    /// HostSetTimerSettings로 바꿀 수 있다. 0 이하면 PostDraftTimerIndicator가 카운트다운 대신
+    /// 경과 시간 표시로 동작한다.
+    /// </summary>
+    public readonly NetworkVariable<float> PostDraftDisplaySeconds = new(10f);
+
     /// <summary>Loading 상태에서 남은 대기 시간(초). Loading이 아닐 때는 0.</summary>
     public readonly NetworkVariable<float> PreDraftSecondsRemaining = new(0f);
 
     /// <summary>현재 턴에 남은 제한 시간(초). 턴 타이머가 꺼져있거나 진행 중이 아니면 0.</summary>
     public readonly NetworkVariable<float> TurnSecondsRemaining = new(0f);
+
+    /// <summary>
+    /// Completed 상태에서 남은 안내 카운트다운 시간(초). PostDraftDisplaySeconds가 0 이하로 설정된
+    /// 경우에는 항상 0으로 유지되며, 이때는 PostDraftTimerIndicator가 경과 시간 표시로 대체한다.
+    /// </summary>
+    public readonly NetworkVariable<float> PostDraftSecondsRemaining = new(0f);
 
     /// <summary>
     /// true면 PreDraft/턴 타이머가 그 자리에서 멈추고, 밴/픽 제출도 서버에서 거부된다("완전 정지").
@@ -96,6 +116,7 @@ public class DraftSessionServer : NetworkBehaviour
 
     private Coroutine preDraftCountdownRoutine;
     private Coroutine turnTimerRoutine;
+    private Coroutine postDraftCountdownRoutine;
 
     // ---------- 진행 중 상태 (서버가 갱신, 클라는 읽기만) ----------
 
@@ -133,6 +154,7 @@ public class DraftSessionServer : NetworkBehaviour
             // NetworkVariable의 생성자 기본값이 아니라 인스펙터에 설정된 값으로 시작하도록 스폰 시점에 반영.
             PreDraftLoadBufferSeconds.Value = defaultPreDraftLoadBufferSeconds;
             TurnTimeLimitSeconds.Value = defaultTurnTimeLimitSeconds;
+            PostDraftDisplaySeconds.Value = defaultPostDraftDisplaySeconds;
         }
 
         Debug.Log($"[{nameof(DraftSessionServer)}] OnNetworkSpawn (session={GetEntityId()}, " +
@@ -228,12 +250,13 @@ public class DraftSessionServer : NetworkBehaviour
     }
 
     /// <summary>
-    /// 대기실에서 preDraft 로딩 유예시간 / 턴 제한시간을 세션 공통값으로 설정한다.
-    /// 라운드별로 다르지 않고 세션 전체에 하나만 존재하는 값이므로, 어느 라운드 행(UI)에서
-    /// 값을 바꾸든 이 메서드를 거쳐 전체(NetworkVariable)에 반영되고 모든 클라이언트 화면에 동기화된다.
+    /// 대기실에서 preDraft 로딩 유예시간 / 턴 제한시간 / 종료 후 안내 카운트다운 시간을
+    /// 세션 공통값으로 설정한다. 라운드별로 다르지 않고 세션 전체에 하나만 존재하는 값이므로,
+    /// 어느 라운드 행(UI)에서 값을 바꾸든 이 메서드를 거쳐 전체(NetworkVariable)에 반영되고
+    /// 모든 클라이언트 화면에 동기화된다.
     /// Lobby 상태에서만 변경 가능(진행 중에 바뀌면 이미 시작된 카운트다운과 어긋날 수 있으므로).
     /// </summary>
-    public void HostSetTimerSettings(float preDraftBufferSeconds, float turnTimeLimitSecondsValue)
+    public void HostSetTimerSettings(float preDraftBufferSeconds, float turnTimeLimitSecondsValue, float postDraftDisplaySecondsValue)
     {
         if (!IsServer)
         {
@@ -248,6 +271,7 @@ public class DraftSessionServer : NetworkBehaviour
 
         PreDraftLoadBufferSeconds.Value = Mathf.Max(0f, preDraftBufferSeconds);
         TurnTimeLimitSeconds.Value = Mathf.Max(0f, turnTimeLimitSecondsValue);
+        PostDraftDisplaySeconds.Value = Mathf.Max(0f, postDraftDisplaySecondsValue);
     }
 
     // ==================== 대기실 -> 드래프트 시작 (호스트 전용) ====================
@@ -499,6 +523,49 @@ public class DraftSessionServer : NetworkBehaviour
     {
         State.Value = DraftSessionState.Completed;
         StopTurnTimer();
+        BeginPostDraftCountdown();
+    }
+
+    // ==================== 서버 내부: 종료 후 안내 카운트다운 ====================
+
+    /// <summary>
+    /// PostDraftDisplaySeconds가 0보다 크면 PostDraftSecondsRemaining을 그 값에서 0까지
+    /// 서버 권위로 카운트다운한다(PreDraftCountdownRoutine과 동일한 패턴). 0 이하로 설정되어 있으면
+    /// 카운트다운을 시작하지 않고 0으로 둔다 - 이 경우 PostDraftTimerIndicator가 로컬 경과 시간
+    /// 표시로 대체한다.
+    /// </summary>
+    private void BeginPostDraftCountdown()
+    {
+        if (postDraftCountdownRoutine != null) StopCoroutine(postDraftCountdownRoutine);
+
+        if (PostDraftDisplaySeconds.Value <= 0f)
+        {
+            PostDraftSecondsRemaining.Value = 0f;
+            postDraftCountdownRoutine = null;
+            return;
+        }
+
+        postDraftCountdownRoutine = StartCoroutine(PostDraftCountdownRoutine());
+    }
+
+    private IEnumerator PostDraftCountdownRoutine()
+    {
+        float remaining = PostDraftDisplaySeconds.Value;
+        PostDraftSecondsRemaining.Value = Mathf.Ceil(remaining);
+
+        while (remaining > 0f)
+        {
+            yield return null;
+
+            remaining -= Time.deltaTime;
+
+            float rounded = Mathf.Max(0f, Mathf.Ceil(remaining));
+            if (!Mathf.Approximately(rounded, PostDraftSecondsRemaining.Value))
+                PostDraftSecondsRemaining.Value = rounded;
+        }
+
+        PostDraftSecondsRemaining.Value = 0f;
+        postDraftCountdownRoutine = null;
     }
 
     // ==================== 서버 내부: 밴/픽 턴 제한 시간 ====================
@@ -597,6 +664,7 @@ public class DraftSessionServer : NetworkBehaviour
     {
         if (preDraftCountdownRoutine != null) StopCoroutine(preDraftCountdownRoutine);
         if (turnTimerRoutine != null) StopCoroutine(turnTimerRoutine);
+        if (postDraftCountdownRoutine != null) StopCoroutine(postDraftCountdownRoutine);
 
         if (ruleManager != null)
         {

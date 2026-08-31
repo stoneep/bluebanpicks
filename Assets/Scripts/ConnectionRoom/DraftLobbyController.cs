@@ -83,6 +83,7 @@ public class DraftLobbyController : MonoBehaviour
         session.HostCanPlay.OnValueChanged += HandleHostCanPlayChanged;
         session.PreDraftLoadBufferSeconds.OnValueChanged += HandleTimerSettingChanged;
         session.TurnTimeLimitSeconds.OnValueChanged += HandleTimerSettingChanged;
+        session.PostDraftDisplaySeconds.OnValueChanged += HandleTimerSettingChanged;
 
         RebuildRows();
         RefreshInteractable();
@@ -102,6 +103,7 @@ public class DraftLobbyController : MonoBehaviour
         session.HostCanPlay.OnValueChanged -= HandleHostCanPlayChanged;
         session.PreDraftLoadBufferSeconds.OnValueChanged -= HandleTimerSettingChanged;
         session.TurnTimeLimitSeconds.OnValueChanged -= HandleTimerSettingChanged;
+        session.PostDraftDisplaySeconds.OnValueChanged -= HandleTimerSettingChanged;
 
         ClearRows();
         session = null;
@@ -118,12 +120,13 @@ public class DraftLobbyController : MonoBehaviour
         bool editable = IsHostInLobby();
         float preDraftBuffer = session.PreDraftLoadBufferSeconds.Value;
         float turnTimeLimit = session.TurnTimeLimitSeconds.Value;
+        float postDraftDisplay = session.PostDraftDisplaySeconds.Value;
 
         foreach (var netRound in session.Format)
         {
             var row = Instantiate(roundRowPrefab, roundListContainer);
             row.Bind(netRound.ToRoundConfig());
-            row.BindTimers(preDraftBuffer, turnTimeLimit); // 세션 공통값이라 모든 행에 동일하게 채움
+            row.BindTimers(preDraftBuffer, turnTimeLimit, postDraftDisplay); // 세션 공통값이라 모든 행에 동일하게 채움
             row.SetInteractable(editable);
 
             if (editable)
@@ -223,8 +226,8 @@ public class DraftLobbyController : MonoBehaviour
     /// <summary>어느 행에서 타이머 값을 고쳤든, 그 행의 현재 입력값을 세션 공통값으로 반영한다.</summary>
     private void HandleTimerEdited(DraftRoundRowView row)
     {
-        var (preDraftBuffer, turnTimeLimit) = row.ReadTimerValues();
-        session.HostSetTimerSettings(preDraftBuffer, turnTimeLimit);
+        var (preDraftBuffer, turnTimeLimit, postDraftDisplay) = row.ReadTimerValues();
+        session.HostSetTimerSettings(preDraftBuffer, turnTimeLimit, postDraftDisplay);
     }
 
     /// <summary>서버 값이 바뀌면(내가 방금 고친 것 포함) 모든 행의 표시값을 다시 맞춘다.</summary>
@@ -236,11 +239,12 @@ public class DraftLobbyController : MonoBehaviour
 
         float preDraftBuffer = session.PreDraftLoadBufferSeconds.Value;
         float turnTimeLimit = session.TurnTimeLimitSeconds.Value;
+        float postDraftDisplay = session.PostDraftDisplaySeconds.Value;
 
         foreach (var row in rows)
         {
             if (!row) continue;
-            row.BindTimers(preDraftBuffer, turnTimeLimit);
+            row.BindTimers(preDraftBuffer, turnTimeLimit, postDraftDisplay);
         }
     }
 
