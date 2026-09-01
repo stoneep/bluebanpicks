@@ -14,9 +14,11 @@ using UnityEngine.UI;
 ///  - 비밀번호는 Relay와 별개로, RoomAccessController(ConnectionApprovalCallback)가 그대로 검증한다.
 ///
 /// 닉네임:
-///  - nicknameProfile(ScriptableObject)에 마지막으로 사용한 닉네임을 저장해두고, 화면이 열릴 때
-///    자동으로 입력창에 채워준다("이미 만들어져있는 닉네임 재사용"). 매번 새로 입력할 필요 없이
-///    그대로 두거나 필요할 때만 수정하면 된다.
+///  - 자유 입력이 아니라 nicknameProfile(ScriptableObject)에 미리 정해둔 목록 중에서
+///    드롭다운으로 고르는 방식이다. 화면이 열릴 때 nicknameProfile.PresetNicknames로 옵션을
+///    채우고, nicknameProfile.LoadIndex()로 마지막에 골랐던 항목을 자동으로 선택해둔다
+///    ("이미 골라뒀던 닉네임 재사용"). 방 만들기/참가하기를 누르는 시점에 현재 드롭다운
+///    선택값을 nicknameProfile.SaveIndex()로 저장한다.
 ///  - 실제 서버 전달은 RoomAccessController.ClientSetConnectionPayload를 통해 비밀번호와 함께
 ///    "접속 승인" 페이로드 한 번에 실어 보낸다. 별도의 네트워크 트래픽(RPC 등)을 추가로 만들지 않기
 ///    위함 - 접속 시점에 딱 한 번만 전달되고, 이후에는 서버가 NetworkList로 필요한 곳에만 동기화한다.
@@ -30,9 +32,11 @@ using UnityEngine.UI;
 public class NetworkConnectionUI : MonoBehaviour
 {
     [Header("닉네임")]
-    [Tooltip("마지막으로 사용한 닉네임을 저장/재사용하기 위한 ScriptableObject. 비워두면 재사용 없이 매번 새로 입력.")]
+    [Tooltip("고를 수 있는 닉네임 목록과, 마지막으로 고른 닉네임을 저장/재사용하기 위한 ScriptableObject. " +
+             "비워두면 드롭다운을 채울 수 없으므로 반드시 할당해야 한다.")]
     [SerializeField] private NicknameProfileSO nicknameProfile;
-    [SerializeField] private TMP_InputField nicknameInput;
+    [Tooltip("자유 입력 없이 nicknameProfile.PresetNicknames 중에서만 고르는 드롭다운.")]
+    [SerializeField] private TMP_Dropdown nicknameDropdown;
 
     [Header("Room 생성 (Host)")]
     [SerializeField] private TMP_InputField hostPasswordInput; // 비워두면 비밀번호 없이 오픈
@@ -70,7 +74,7 @@ public class NetworkConnectionUI : MonoBehaviour
     private void Start()
     {
         TryBindNetworkManager();
-        LoadNicknameIntoInput();
+        LoadNicknameIntoDropdown();
     }
 
     private void OnEnable()
@@ -81,26 +85,34 @@ public class NetworkConnectionUI : MonoBehaviour
 
     // ==================== 닉네임 ====================
 
-    private void LoadNicknameIntoInput()
+    /// <summary>
+    /// nicknameProfile.PresetNicknames로 드롭다운 옵션을 채우고, 마지막으로 골랐던 항목을
+    /// (LoadIndex) 선택 상태로 맞춰둔다. SetValueWithoutNotify를 쓰는 이유는 여기서 값을
+    /// 채우는 동작 자체가 "사용자가 새로 고른 것"은 아니기 때문 - onValueChanged 콜백을
+    /// 등록해뒀다면 이 시점에 잘못 발화하지 않도록 하기 위함(현재는 별도 콜백 없음).
+    /// </summary>
+    private void LoadNicknameIntoDropdown()
     {
-        if (nicknameInput == null || nicknameProfile == null) return;
-        string saved = nicknameProfile.Load();
-        if (!string.IsNullOrEmpty(saved)) nicknameInput.text = saved;
+        if (nicknameDropdown == null || nicknameProfile == null) return;
+
+        nicknameDropdown.ClearOptions();
+        nicknameDropdown.AddOptions(new System.Collections.Generic.List<string>(nicknameProfile.PresetNicknames));
+
+        nicknameDropdown.SetValueWithoutNotify(nicknameProfile.LoadIndex());
+        nicknameDropdown.RefreshShownValue();
     }
 
     /// <summary>
-    /// 입력창의 현재 값을 정리(trim/길이 제한)해서 nicknameProfile에 저장하고(다음에도 재사용 가능하도록),
-    /// 정리된 최종 값을 반환한다. 입력창도 정리된 값으로 다시 맞춰서 사용자에게 보여준다.
+    /// 드롭다운에서 지금 선택된 인덱스를 nicknameProfile에 저장하고(다음에도 같은 항목이 재선택되도록),
+    /// 최종 선택된 닉네임 문자열을 반환한다.
     /// </summary>
     private string ResolveNickname()
     {
-        string typed = nicknameInput != null ? nicknameInput.text : string.Empty;
-        string resolved = nicknameProfile != null
-            ? nicknameProfile.Save(typed)
-            : (string.IsNullOrWhiteSpace(typed) ? "Player" : typed.Trim());
+        if (nicknameDropdown == null) return "Player";
 
-        if (nicknameInput != null) nicknameInput.text = resolved;
-        return resolved;
+        return nicknameProfile != null
+            ? nicknameProfile.SaveIndex(nicknameDropdown.value)
+            : nicknameDropdown.options[nicknameDropdown.value].text;
     }
 
     private void TryBindNetworkManager()
