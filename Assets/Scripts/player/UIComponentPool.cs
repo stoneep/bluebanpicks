@@ -44,25 +44,14 @@ namespace Common.Pooling
 
         public void Ensure(int count, Action<T> onCreated = null)
         {
-            // if (count < 0) count = 0;
-            //
-            // while (items.Count < count)
-            // {
-            //     var inst = UnityEngine.Object.Instantiate(prefab, parent);
-            //     ApplyRectDefaults(inst);
-            //     SafeReturn(inst);
-            //     items.Add(inst);
-            //     onCreated?.Invoke(inst);
-            // } --> 생성직후 숨겨버리는코드
             
             while (items.Count < count)
             {
                 var inst = UnityEngine.Object.Instantiate(prefab, parent);
                 ApplyRectDefaults(inst);
-
-                // SafeReturn(inst) 대신: 시각 정리는 하되 SetActive는 건드리지 않음
+                
                 if (inst is IUIReusable reusable) reusable.OnReturn();
-                inst.gameObject.SetActive(true);   // ← 처음부터 열어둠
+                inst.gameObject.SetActive(true);  
 
                 items.Add(inst);
                 onCreated?.Invoke(inst);
@@ -109,8 +98,6 @@ namespace Common.Pooling
             int idx = items.IndexOf(item);
             if (idx >= 0) SetVisible(idx, false);
             
-            // if (item.gameObject.activeSelf)
-            //     item.gameObject.SetActive(false);
         }
 
         private void ApplyRectDefaults(T item)
@@ -124,13 +111,8 @@ namespace Common.Pooling
             rt.sizeDelta = size;
         }
         
-        /// <summary>
-        /// 모든 풀링된 슬롯의 크기를 업데이트
-        /// </summary>
         public void UpdateCellSize(Vector2 newSize)
         {
-            // size 필드는 readonly라서 직접 변경 불가
-            // 대신 모든 아이템의 RectTransform을 업데이트
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];

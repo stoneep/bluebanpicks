@@ -3,8 +3,8 @@ using UnityEngine.UI;
 
 public class AlphaBlink : MonoBehaviour
 {
-    [SerializeField] private float speed = 3f; // 클수록 빠르게 깜빡임
-    private Image image; // SpriteRenderer 쓴다면 이걸로 교체
+    [SerializeField] private float speed = 3f;
+    private Image image;
 
     private void Awake()
     {

@@ -312,7 +312,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -260.23, y: -39.908}
+  m_AnchoredPosition: {x: -260.22998, y: -39.90796}
   m_SizeDelta: {x: 160, y: -200}
   m_Pivot: {x: 1, y: 0.5}
 --- !u!114 &71926931
@@ -2194,7 +2194,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AspectRatioWindowLock
   aspectWidth: 16
   aspectHeight: 9
-  verboseLogging: 1
+  verboseLogging: 0
 --- !u!4 &1323928980
 Transform:
   m_ObjectHideFlags: 0

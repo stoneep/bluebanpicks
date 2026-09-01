@@ -3,11 +3,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// 통합된 필터 버튼 (Mediator 패턴 전용)
-/// 
-/// IFilterButtonMediator만 사용하도록 단순화
-/// </summary>
 public class UniversalFilterButton : MonoBehaviour
 {
     #region UI References
@@ -28,47 +23,33 @@ public class UniversalFilterButton : MonoBehaviour
     private AtlasImageBinder _iconBinder;
     private Action _onClickAction;
     
-    /// <summary>
-    /// Mediator Pattern: 간단한 데이터 전달 방식
-    /// </summary>
     public void Initialize(string iconName, FilterStyleData styleData)
     {
         var mediator = new SimpleDataMediator(styleData);
         Initialize(iconName, mediator);
     }
     
-    /// <summary>
-    /// Mediator Pattern: 중재자 패턴 방식
-    /// </summary>
     public void Initialize(string iconName, IFilterButtonMediator mediator)
     {
         _styleMediator = mediator;
         
-        // 아이콘 바인더 초기화 (필요시)
         if (_iconBinder == null && !string.IsNullOrEmpty(iconName))
         {
             _iconBinder = new AtlasImageBinder();
-            // _iconBinder.Bind(iconImage, atlasKey, iconName);
         }
         
-        // 초기 상태 적용
         ApplyMediatorVisualState(false);
     }
     
-    /// <summary>
-    /// Button 모드로 설정 (아이콘, 텍스트, 클릭 핸들러)
-    /// </summary>
     public void Setup(string text, Sprite icon, bool isSelected, Action onClick, IFilterButtonMediator mediator = null)
     {
         _onClickAction = onClick;
         
-        // 중재자 설정
         if (mediator != null)
         {
             _styleMediator = mediator;
         }
-
-        // 아이콘 설정
+        
         if (iconImage && icon != null)
         {
             iconImage.sprite = icon;
@@ -78,8 +59,7 @@ public class UniversalFilterButton : MonoBehaviour
         {
             iconImage.enabled = false;
         }
-
-        // 텍스트 설정
+        
         if (labelText)
         {
             if (!string.IsNullOrEmpty(text))
@@ -92,8 +72,7 @@ public class UniversalFilterButton : MonoBehaviour
                 labelText.gameObject.SetActive(false);
             }
         }
-
-        // Button 모드 활성화
+        
         EnableButtonMode();
         SetSelected(isSelected);
     }
@@ -107,9 +86,6 @@ public class UniversalFilterButton : MonoBehaviour
     
     #region Selection Interface
     
-    /// <summary>
-    /// 선택 상태 설정
-    /// </summary>
     public void SetSelected(bool isSelected)
     {
         if (_styleMediator != null)
@@ -137,19 +113,14 @@ public class UniversalFilterButton : MonoBehaviour
     
     private void Awake()
     {
-        // Button이 없으면 자동으로 가져오기
         if (!button) 
             button = GetComponent<Button>();
-        // 비주얼(색상 등)은 전부 Mediator가 수동으로 관리하므로
-        // Selectable의 자동 Color Tint 트랜지션이 backgroundImage/iconImage 색을
-        // 되돌리지 못하도록 꺼둔다. (안 꺼두면 클릭/호버 시 배경색이 원래대로 복구됨)
         if (button != null)
             button.transition = Selectable.Transition.None;
     }
     
     private void OnDestroy()
     {
-        // AtlasImageBinder 정리
         _iconBinder?.Release(iconImage);
     }
     

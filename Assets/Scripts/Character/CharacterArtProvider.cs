@@ -7,7 +7,7 @@ public sealed class CharacterArtProvider
 {
     private readonly Dictionary<string, AsyncOperationHandle<Sprite>> cache = new();
 
-    // Address 규칙은 여기 단 한 곳에서만 관리
+    
     private static string Key(string id, CharacterCut cut) => cut switch
     {
         CharacterCut.Large => $"char/{id}/portrait_large",

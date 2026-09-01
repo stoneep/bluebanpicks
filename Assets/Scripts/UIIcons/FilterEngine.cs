@@ -7,7 +7,6 @@ public sealed class FilterEngine<TData>
     private readonly List<TData> view = new();
     private readonly IFilteredListView<TData> listView;
     private readonly Func<TData, bool> pass;
-    // 정렬 로직을 외부에서 주입받음
     private Comparison<TData> sortComparison;
     
     public FilterEngine(IFilteredListView<TData> listView, Func<TData, bool> pass)
@@ -32,8 +31,7 @@ public sealed class FilterEngine<TData>
             var d = all[i];
             if (pass == null || pass(d)) view.Add(d);
         }
-
-        // 필터링 후 정렬 수행
+        
         if (sortComparison != null)
             view.Sort(sortComparison);
 

@@ -54,14 +54,10 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
 
     protected UIComponentPool<T> slotPool;
     protected int itemCount;
-    protected int lastStartIndex = -1; // Vertical: startRow / Horizontal: startColumn
-
-    // Refresh(scrollValue)에 마지막으로 들어온 스크롤 값을 기억해둔다.
-    // RebindVisible()이 "레이아웃을 처음부터 다시 배치해야 하는 상황(ForceRefresh 직후)"에
-    // 스크롤을 0으로 되돌리지 않고 원래 위치를 그대로 복원하기 위해 사용한다.
+    protected int lastStartIndex = -1;
+    
     protected float lastScrollValue = 0f;
     
-    // Viewport 캐싱
     protected RectTransform cachedViewport;
 
     public event Action<int, T> OnRequestBind;
@@ -71,7 +67,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         slotPool = UIComponentPool<T>.CreateTopLeft(slotPrefab, content, cellSize);
         CacheViewport();
         
-        // Content Anchor를 Top-Left로 강제 설정 (Stretch 모드 방지)
         if (content != null)
         {
             content.anchorMin = new Vector2(0, 1);
@@ -87,17 +82,11 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         UpdatePoolSize();
         ForceRefresh();
     }
-
-    /// <summary>
-    /// IVirtualizedGrid 인터페이스 구현
-    /// Vertical 모드: scrollY는 Y축 스크롤 값
-    /// Horizontal 모드: scrollY는 X축 스크롤 값으로 해석
-    /// </summary>
+    
     public void Refresh(float scrollValue)
     {
         if (slotPool == null) return;
-
-        // 스크롤 범위 제한 적용
+        
         if (useScrollRangeLimit)
         {
             scrollValue = Mathf.Clamp(scrollValue, scrollRange.y, scrollRange.x);
@@ -114,23 +103,11 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
             RefreshHorizontal(scrollValue);
         }
     }
-
-    /// <summary>
-    /// 스크롤 위치나 배치(레이아웃)는 그대로 두고, 지금 화면에 보이는(활성화된) 슬롯들만
-    /// 다시 바인딩한다. 선택 하이라이트, 밴/픽 락 오버레이처럼 "위치는 안 바뀌었지만
-    /// 슬롯에 표시할 내용은 바뀐" 경우에 사용한다.
-    ///
-    /// Refresh(scrollValue)는 "startRow(또는 startColumn)가 이전과 같으면 아무것도 안 한다"는
-    /// 캐싱 최적화가 있어서, 스크롤을 움직이지 않은 채로 이 용도로 Refresh를 호출하면
-    /// OnRequestBind가 아예 발화하지 않는 문제가 있었다. 그래서 이 캐시를 완전히 우회하는
-    /// 별도 경로가 필요하다.
-    /// </summary>
+    
     public void RebindVisible()
     {
         if (slotPool == null) return;
-
-        // SetTotalCount() 직후(ForceRefresh로 lastStartIndex가 -1로 초기화된 상태)라면
-        // 아직 한 번도 배치되지 않은 것이므로, 이전 스크롤 위치 기준으로 완전히 다시 배치해야 한다.
+        
         if (lastStartIndex < 0)
         {
             Refresh(lastScrollValue);
@@ -148,15 +125,12 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
             if (dataIndex < 0 || dataIndex >= itemCount) continue;
 
             var slot = slotPool.Items[i];
-            if (slot == null || !slot.gameObject.activeSelf) continue; // 컬링/비활성 슬롯은 스킵
+            if (slot == null || !slot.gameObject.activeSelf) continue;
 
             OnRequestBind?.Invoke(dataIndex, slot);
         }
     }
-
-    /// <summary>
-    /// Vertical 모드 Refresh (기존 로직)
-    /// </summary>
+    
     protected void RefreshVertical(float scrollY)
     {
         float rowH = cellSize.y + spacing.y;
@@ -178,14 +152,12 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
                 int r = dataIndex / columns;
                 int c = dataIndex % columns;
                 
-                // startOffset 적용
                 float x = startOffset.x + padding.x + c * (cellSize.x + spacing.x);
                 float y = startOffset.y - (padding.y + r * (cellSize.y + spacing.y));
 
                 var rectTransform = (RectTransform)slot.transform;
                 rectTransform.anchoredPosition = new Vector2(x, y);
                 
-                // Culling Offset 적용
                 bool isVisible = useCullingOffset ?
                     IsSlotVisible(rectTransform) : true;
                 
@@ -202,10 +174,7 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
             }
         }
     }
-
-    /// <summary>
-    /// Horizontal 모드 Refresh (새로운 로직)
-    /// </summary>
+    
     protected void RefreshHorizontal(float scrollX)
     {
         float colW = cellSize.x + spacing.x;
@@ -224,21 +193,18 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
 
             if (dataIndex >= 0 && dataIndex < itemCount)
             {
-                int c = dataIndex / rows;      // 열 인덱스
-                int r = dataIndex % rows;      // 행 인덱스
+                int c = dataIndex / rows;     
+                int r = dataIndex % rows;     
                 
-                // startOffset 적용
                 float x = startOffset.x + padding.x + c * (cellSize.x + spacing.x);
                 float y = startOffset.y - (padding.y + r * (cellSize.y + spacing.y));
 
                 var rectTransform = (RectTransform)slot.transform;
                 rectTransform.anchoredPosition = new Vector2(x, y);
                 
-                // Culling Offset 적용
                 bool isVisible = useCullingOffset ?
                     IsSlotVisible(rectTransform) : true;
                 
-                //slot.gameObject.SetActive(isVisible); <-제어권x
                 
                 slotPool.SetVisible(i, isVisible);
                 
@@ -246,44 +212,35 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
             }
             else
             {
-                //slot.gameObject.SetActive(false); <-제어권x
                 slotPool.SetVisible(i, false);
             }
         }
     }
     
-    /// <summary>
-    /// Culling Offset을 고려하여 슬롯이 보이는지 확인
-    /// </summary>
     protected bool IsSlotVisible(RectTransform slotRect)
     {
         if (cachedViewport == null)
         {
             CacheViewport();
-            if (cachedViewport == null) return true; // viewport 없으면 항상 표시
+            if (cachedViewport == null) return true;
         }
-
-        // 슬롯의 월드 좌표 범위
+        
         Vector3[] slotCorners = new Vector3[4];
         slotRect.GetWorldCorners(slotCorners);
         
-        // Viewport의 월드 좌표 범위
         Vector3[] viewportCorners = new Vector3[4];
         cachedViewport.GetWorldCorners(viewportCorners);
         
-        // Culling Offset 적용 (로컬 좌표계에서)
         float viewportMinX = viewportCorners[0].x + cullingOffset.x;
         float viewportMaxX = viewportCorners[2].x - cullingOffset.x;
         float viewportMinY = viewportCorners[0].y + cullingOffset.y;
         float viewportMaxY = viewportCorners[2].y - cullingOffset.y;
         
-        // 슬롯 범위
         float slotMinX = slotCorners[0].x;
         float slotMaxX = slotCorners[2].x;
         float slotMinY = slotCorners[0].y;
         float slotMaxY = slotCorners[2].y;
         
-        // AABB 충돌 검사
         bool isOverlapping = 
             slotMaxX >= viewportMinX && slotMinX <= viewportMaxX &&
             slotMaxY >= viewportMinY && slotMinY <= viewportMaxY;
@@ -291,9 +248,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         return isOverlapping;
     }
     
-    /// <summary>
-    /// Viewport 캐싱
-    /// </summary>
     protected void CacheViewport()
     {
         if (cachedViewport == null)
@@ -314,48 +268,39 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         
         if (layoutMode == GridLayoutMode.Vertical)
         {
-            // Vertical: 보이는 행 수 계산
             float viewportH = (cachedViewport != null) ?
                 cachedViewport.rect.height : 1000f;
             int visibleRows = Mathf.CeilToInt(viewportH / (cellSize.y + spacing.y));
             int totalPoolCount = columns * (visibleRows + bufferCount * 2);
             
-            // ⭐ itemCount보다 작으면 itemCount만큼 생성 (최소 보장)
             totalPoolCount = Mathf.Min(totalPoolCount, itemCount);
             
             slotPool.Ensure(totalPoolCount);
         }
         else
         {
-            // Horizontal: 보이는 열 수 계산
             float viewportW = (cachedViewport != null) ?
                 cachedViewport.rect.width : 1000f;
             int visibleCols = Mathf.CeilToInt(viewportW / (cellSize.x + spacing.x));
             int totalPoolCount = rows * (visibleCols + bufferCount * 2);
             
-            // ⭐ itemCount보다 작으면 itemCount만큼 생성 (최소 보장)
             totalPoolCount = Mathf.Max(totalPoolCount, itemCount);
             
             slotPool.Ensure(totalPoolCount);
         }
     }
-
-    /// <summary>
-    /// Content 크기 계산 (Height + Width)
-    /// </summary>
+    
     protected void RecalcContentSize()
     {
         float h, w;
 
         if (layoutMode == GridLayoutMode.Vertical)
         {
-            // Vertical 모드: Height 자동 계산, Width 선택적
             int totalRows = Mathf.Max(1, Mathf.CeilToInt(itemCount / (float)columns));
             
             h = padding.y * 2 + totalRows * cellSize.y + (totalRows - 1) * spacing.y;
             h += Mathf.Abs(startOffset.y) + Mathf.Abs(endOffset.y);
             
-            // Width 계산
             if (autoCalculateWidth)
             {
                 w = padding.x * 2 + columns * cellSize.x + (columns - 1) * spacing.x;
@@ -368,27 +313,22 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
             }
             else
             {
-                w = content.sizeDelta.x; // 기존 width 유지
+                w = content.sizeDelta.x;
             }
         }
         else
         {
-            // Horizontal 모드: Width 자동 계산, Height 선택적
             int totalCols = Mathf.Max(1, Mathf.CeilToInt(itemCount / (float)rows));
             
-            // 실제 콘텐츠 너비 계산
             w = padding.x * 2 + totalCols * cellSize.x + (totalCols - 1) * spacing.x;
             w += Mathf.Abs(startOffset.x);
             
             float calculatedWidth = w;
             
-            // endOffset을 "마지막 슬롯 이후 여유 공간"으로 해석
-            // 예: endOffset.x = 100 → 마지막 슬롯 뒤에 100px 추가
             w += Mathf.Abs(endOffset.x);
             
             Debug.Log($"[BaseVirtualizedGrid.Horizontal] calculatedWidth={calculatedWidth}, endOffset={endOffset.x}, finalWidth={w}");
             
-            // Viewport 기반 최소 너비 보장 (슬롯이 적을 때)
             if (cachedViewport != null && Mathf.Abs(endOffset.x) == 0)
             {
                 float minRequiredWidth = cachedViewport.rect.width + Mathf.Abs(startOffset.x);
@@ -402,7 +342,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
                 w = Mathf.Max(w, minContentWidth);
             }
             
-            // Height는 rows 기반으로 계산
             h = padding.y * 2 + rows * cellSize.y + (rows - 1) * spacing.y;
             h += Mathf.Abs(startOffset.y) + Mathf.Abs(endOffset.y);
         }
@@ -410,9 +349,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         content.sizeDelta = new Vector2(w, h);
     }
     
-    /// <summary>
-    /// [레거시] Height만 계산 (하위 호환성)
-    /// </summary>
     [System.Obsolete("Use RecalcContentSize() instead")]
     protected void RecalcContentHeight()
     {
@@ -421,9 +357,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
     
     #region Public API for Runtime Configuration
     
-    /// <summary>
-    /// 레이아웃 모드 변경 (런타임)
-    /// </summary>
     public void SetLayoutMode(GridLayoutMode mode)
     {
         if (layoutMode == mode) return;
@@ -434,9 +367,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         ForceRefresh();
     }
     
-    /// <summary>
-    /// Columns 설정 (Vertical 모드에서 사용)
-    /// </summary>
     public void SetColumns(int count)
     {
         columns = Mathf.Max(1, count);
@@ -448,9 +378,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         }
     }
     
-    /// <summary>
-    /// Rows 설정 (Horizontal 모드에서 사용)
-    /// </summary>
     public void SetRows(int count)
     {
         rows = Mathf.Max(1, count);
@@ -462,9 +389,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         }
     }
     
-    /// <summary>
-    /// Cell Size 설정
-    /// </summary>
     public void SetCellSize(Vector2 size)
     {
         cellSize = size;
@@ -474,9 +398,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         ForceRefresh();
     }
     
-    /// <summary>
-    /// Spacing 설정
-    /// </summary>
     public void SetSpacing(Vector2 space)
     {
         spacing = space;
@@ -484,9 +405,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         ForceRefresh();
     }
     
-    /// <summary>
-    /// Padding 설정
-    /// </summary>
     public void SetPadding(Vector2 pad)
     {
         padding = pad;
@@ -494,18 +412,12 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         ForceRefresh();
     }
     
-    /// <summary>
-    /// 시작 오프셋 설정 (런타임에서도 변경 가능)
-    /// </summary>
     public void SetStartOffset(Vector2 offset)
     {
         startOffset = offset;
         ForceRefresh();
     }
     
-    /// <summary>
-    /// 종료 오프셋 설정 (런타임에서도 변경 가능)
-    /// </summary>
     public void SetEndOffset(Vector2 offset)
     {
         endOffset = offset;
@@ -513,21 +425,13 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         ForceRefresh();
     }
     
-    /// <summary>
-    /// 스크롤 범위 설정 (런타임에서도 변경 가능)
-    /// </summary>
     public void SetScrollRange(float min, float max, bool enable = true)
     {
-        scrollRange = new Vector2(max, min); // x가 max, y가 min
+        scrollRange = new Vector2(max, min);
         useScrollRangeLimit = enable;
         ForceRefresh();
     }
     
-    /// <summary>
-    /// Culling Offset 설정 (런타임에서도 변경 가능)
-    /// 양수 값: viewport 밖으로 더 나간 후 사라짐 (예: X=-10이면 왼쪽으로 10픽셀 더 나가야 사라짐)
-    /// 음수 값: viewport 안쪽에서 미리 사라짐
-    /// </summary>
     public void SetCullingOffset(Vector2 offset, bool enable = true)
     {
         cullingOffset = offset;
@@ -535,9 +439,6 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         ForceRefresh();
     }
     
-    /// <summary>
-    /// Content Width 자동 계산 설정
-    /// </summary>
     public void SetAutoCalculateWidth(bool enable, float minWidth = 0f)
     {
         autoCalculateWidth = enable;
@@ -545,17 +446,11 @@ public abstract class BaseVirtualizedGrid<T> : MonoBehaviour, IVirtualizedGrid
         RecalcContentSize();
     }
     
-    /// <summary>
-    /// 현재 설정 값 조회
-    /// </summary>
     public (GridLayoutMode mode, int columns, int rows, Vector2 cellSize, Vector2 spacing, Vector2 padding) GetLayoutSettings()
     {
         return (layoutMode, columns, rows, cellSize, spacing, padding);
     }
     
-    /// <summary>
-    /// 현재 오프셋 및 범위 설정 조회
-    /// </summary>
     public (Vector2 startOffset, Vector2 endOffset, Vector2 scrollRange, bool useLimit, Vector2 cullingOffset, bool useCulling) GetCurrentSettings()
     {
         return (startOffset, endOffset, scrollRange, useScrollRangeLimit, cullingOffset, useCullingOffset);

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
-public enum Language { KR = 1, EN = 2 } // CSV 열(Column) 인덱스와 일치시킴
+public enum Language { KR = 1, EN = 2 }
 
 public class LocalizationManager : MonoBehaviour
 {
@@ -12,8 +12,7 @@ public class LocalizationManager : MonoBehaviour
     [Header("Settings")]
     [SerializeField] private Language currentLanguage = Language.KR;
     [SerializeField] private string csvPath = "Data/Localization";
-
-    // Key: 번역키, Value: [KR문장, EN문장] 배열
+    
     private readonly Dictionary<string, string[]> _table = new();
 
     private void Awake()
@@ -21,7 +20,7 @@ public class LocalizationManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject); //
+            DontDestroyOnLoad(gameObject);
             LoadLocalizationCsv();
         }
         else
@@ -32,7 +31,7 @@ public class LocalizationManager : MonoBehaviour
 
     private void LoadLocalizationCsv()
     {
-        TextAsset csvFile = Resources.Load<TextAsset>(csvPath); //
+        TextAsset csvFile = Resources.Load<TextAsset>(csvPath);
         if (csvFile == null)
         {
             Debug.LogError($"❌ [LocalizationManager] CSV를 찾을 수 없습니다: {csvPath}");
@@ -41,10 +40,9 @@ public class LocalizationManager : MonoBehaviour
 
         string[] lines = csvFile.text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
         
-        // CSV 파싱용 정규표현식 (따옴표 안의 쉼표 무시)
         string pattern = @",(?=(?:[^""]*""[^""]*"")*(?![^""]*""))";
 
-        for (int i = 1; i < lines.Length; i++) // 헤더 제외
+        for (int i = 1; i < lines.Length; i++)
         {
             if (string.IsNullOrWhiteSpace(lines[i])) continue;
 
@@ -67,18 +65,15 @@ public class LocalizationManager : MonoBehaviour
 
         if (_table.TryGetValue(key, out string[] translations))
         {
-            // Language enum 값을 인덱스로 사용하여 텍스트 반환
             int index = (int)currentLanguage - 1;
             return translations[index];
         }
 
-        return key; // 키가 없으면 키 그대로 반환 (버그 확인용)
+        return key;
     }
-
-    // 언어 변경 기능
+    
     public void SetLanguage(Language lang)
     {
         currentLanguage = lang;
-        // 필요 시 UI 전체 갱신 이벤트 호출 가능
     }
 }

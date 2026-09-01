@@ -4,26 +4,14 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// 대기실 화면: 라운드 목록 편집(호스트 전용) + 진영 배정(호스트 전용) + 드래프트 시작.
-/// DraftSessionServer의 Format/State/FirstSideClientId/SecondSideClientId를 그대로 구독해서 그린다.
-///
-/// 진영 배정은 테스트 편의를 위해 "자동 배정"(랜덤으로 변경 선공/후공) 버튼 하나로 단순화했다.
-/// 실제 매치메이킹/초대 시스템이 붙으면 이 부분만 교체하면 됨.
-///
-/// 편집 흐름: 라운드 행(DraftRoundRowView)이 편집되면 지금 보이는 모든 행의 값을 다시 모아
-/// DraftFormatData를 새로 만들고 HostSetFormat으로 통째로 반영한다. HostSetFormat은
-/// RPC가 아니라 서버(호스트)에서 로컬로 직접 호출하는 일반 메서드이므로 - 이 컨트롤러 자체가
-/// 호스트에서만 편집 가능 상태(SetInteractable)이기 때문에 게스트가 잘못 호출할 일은 없다.
-/// </summary>
 public class DraftLobbyController : MonoBehaviour
 {
     [Header("Round List")]
     [SerializeField] private Transform roundListContainer;
     [SerializeField] private DraftRoundRowView roundRowPrefab;
     [SerializeField] private Button addRoundButton;
-    [SerializeField] private Button flipLastRoundButton; // 마지막 라운드를 복제 + 이니셔티브 반전해서 추가
-    [SerializeField] private Button applyLolPresetButton; // 전반 ABABAB/ABBAAB, 후반 BABA/BAABBA 한 번에 적용 (테스트용)
+    [SerializeField] private Button flipLastRoundButton;
+    [SerializeField] private Button applyLolPresetButton;
 
     [Header("Session Controls (호스트 전용)")]
     [SerializeField] private Button autoAssignSidesButton;
@@ -39,7 +27,7 @@ public class DraftLobbyController : MonoBehaviour
 
     [Header("Room Code")]
     [SerializeField] private TMP_Text roomCodeText;
-    [SerializeField] private Button copyRoomCodeButton; // 있으면 클립보드 복사
+    [SerializeField] private Button copyRoomCodeButton;
     
     private DraftSessionServer session;
     private readonly List<DraftRoundRowView> rows = new();
@@ -60,7 +48,7 @@ public class DraftLobbyController : MonoBehaviour
         if (DraftSessionServer.Instance != null)
             Bind(DraftSessionServer.Instance);
         else
-            DraftSessionServer.OnSessionReady += Bind; // 아직 호스트가 안 떴으면, 뜨는 순간 자동 바인딩
+            DraftSessionServer.OnSessionReady += Bind;
     }
 
     private void OnDisable()
@@ -68,8 +56,7 @@ public class DraftLobbyController : MonoBehaviour
         DraftSessionServer.OnSessionReady -= Bind;
         Unbind();
     }
-
-    // ==================== 바인딩 ====================
+    
 
     private void Bind(DraftSessionServer newSession)
     {
@@ -108,8 +95,7 @@ public class DraftLobbyController : MonoBehaviour
         ClearRows();
         session = null;
     }
-
-    // ==================== 라운드 목록 ====================
+    
 
     private void HandleFormatChanged(NetworkListEvent<NetworkDraftRoundConfig> _) => RebuildRows();
 
@@ -126,7 +112,7 @@ public class DraftLobbyController : MonoBehaviour
         {
             var row = Instantiate(roundRowPrefab, roundListContainer);
             row.Bind(netRound.ToRoundConfig());
-            row.BindTimers(preDraftBuffer, turnTimeLimit, postDraftDisplay); // 세션 공통값이라 모든 행에 동일하게 채움
+            row.BindTimers(preDraftBuffer, turnTimeLimit, postDraftDisplay);
             row.SetInteractable(editable);
 
             if (editable)
@@ -157,9 +143,7 @@ public class DraftLobbyController : MonoBehaviour
         data.AddRound(new DraftRoundConfig(3, 3, 3, 3, DraftSide.First, $"라운드 {rows.Count + 1}"));
         session.HostSetFormat(data);
     }
-
-    /// <summary>마지막 라운드를 복제하되 시작 진영만 반전해서 새 라운드로 추가.
-    /// "전반은 선공부터, 후반은 후공부터" 같은 규칙을 버튼 한 번으로 만들 때 사용.</summary>
+    
     private void HandleFlipLastRound()
     {
         if (rows.Count == 0)
@@ -184,11 +168,7 @@ public class DraftLobbyController : MonoBehaviour
         }
         session.HostSetFormat(data);
     }
-
-    /// <summary>
-    /// 논의했던 정확한 규칙(전반 밴 ABABAB / 전반 픽 ABBAAB / 후반 밴 BABA / 후반 픽 BAABBA)을
-    /// 기존 라운드를 전부 지우고 한 번에 적용한다. 빠른 테스트/데모용.
-    /// </summary>
+    
     private void HandleApplyLolPreset()
     {
         var data = new DraftFormatData();
@@ -220,17 +200,14 @@ public class DraftLobbyController : MonoBehaviour
     }
 
     private void ApplyRowsToServer() => session.HostSetFormat(CollectCurrentRows());
-
-    // ==================== 타이머 (세션 공통값) ====================
-
-    /// <summary>어느 행에서 타이머 값을 고쳤든, 그 행의 현재 입력값을 세션 공통값으로 반영한다.</summary>
+    
+    
     private void HandleTimerEdited(DraftRoundRowView row)
     {
         var (preDraftBuffer, turnTimeLimit, postDraftDisplay) = row.ReadTimerValues();
         session.HostSetTimerSettings(preDraftBuffer, turnTimeLimit, postDraftDisplay);
     }
-
-    /// <summary>서버 값이 바뀌면(내가 방금 고친 것 포함) 모든 행의 표시값을 다시 맞춘다.</summary>
+    
     private void HandleTimerSettingChanged(float previous, float current) => RefreshTimerFields();
 
     private void RefreshTimerFields()
@@ -247,17 +224,8 @@ public class DraftLobbyController : MonoBehaviour
             row.BindTimers(preDraftBuffer, turnTimeLimit, postDraftDisplay);
         }
     }
-
-    // ==================== 진영 배정 / 시작 ====================
-
-    /// <summary>
-    /// 역할 규칙: 기본적으로 호스트는 관전자이고, 드래프트에 실제로 참가하는(선공/후공)
-    /// 클라이언트는 호스트를 제외한 나머지 접속자들 중에서만 뽑는다.
-    /// 단, "2인 연습 모드"(HostCanPlay)가 켜져 있으면 호스트도 후보에 포함시킨다 -
-    /// 관전자 역할의 3번째 인원 없이, 대결할 두 사람 중 한 명이 방을 만들고
-    /// 자기 자신을 선공/후공 중 하나로 배정해 바로 시작할 수 있게 하기 위함.
-    /// (서버 쪽 DraftSessionServer.HostAssignSides에도 같은 규칙이 최종 방어선으로 들어가 있음)
-    /// </summary>
+    
+    
     private void HandleAutoAssignSides()
     {
         bool hostCanPlay = session.HostCanPlay.Value;
@@ -277,9 +245,7 @@ public class DraftLobbyController : MonoBehaviour
             SetStatus($"진영을 배정하려면 참가 가능한 인원이 2명 이상이어야 합니다. {hint}");
             return;
         }
-
-        // 접속자가 3명 이상인데 2인 연습 모드가 켜져 있는 경우, 호스트를 포함해 무작위로
-        // 두 명을 뽑는다(랜덤 셔플 후 앞 2명 사용). 접속자가 정확히 2명이면 항상 그 둘이다.
+        
         for (int i = players.Count - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
@@ -295,7 +261,7 @@ public class DraftLobbyController : MonoBehaviour
     {
         if (!IsHostInLobby())
         {
-            RefreshHostCanPlayToggle(); // 게스트가 실수로 못 건드리게 즉시 원복 표시
+            RefreshHostCanPlayToggle();
             return;
         }
 
@@ -316,12 +282,11 @@ public class DraftLobbyController : MonoBehaviour
         hostCanPlayToggle.SetIsOnWithoutNotify(value);
         hostCanPlayToggle.interactable = IsHostInLobby();
     }
-
-    // ==================== 상태 표시 ====================
+    
 
     private void HandleStateChanged(DraftSessionState previous, DraftSessionState current)
     {
-        RebuildRows(); // 상태가 바뀌면 편집 가능 여부(SetInteractable)도 같이 바뀌어야 하므로 재구성
+        RebuildRows();
         RefreshInteractable();
         RefreshStatus();
     }

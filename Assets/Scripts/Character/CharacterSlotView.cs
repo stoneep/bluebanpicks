@@ -8,11 +8,11 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
 {
     [Header("Refs - Main")]
     [SerializeField] private Button button;
-    [SerializeField] private Image portraitIcon; // 변수명 명확화 (icon -> portraitIcon)
+    [SerializeField] private Image portraitIcon; 
     [SerializeField] private TMP_Text nameText;
     [SerializeField] private TMP_Text levelText;
     [SerializeField] private Image[] rarityStars;
-    [SerializeField] private Image lockOverlay; // GameObject -> Image: on/off뿐 아니라 색으로 락/밴픽사용중 구분
+    [SerializeField] private Image lockOverlay; 
 
     [Header("Lock Overlay Colors")]
     [Tooltip("data.IsLocked == true (미보유 캐릭터)일 때 오버레이 색")]
@@ -33,70 +33,70 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
 
     [Header("Refs - Combat Types")]
     [SerializeField] private Image attackTypeIcon;
-    [SerializeField] private Image attackTypeBg; // 배경
+    [SerializeField] private Image attackTypeBg; 
     [SerializeField] private Image defenseTypeIcon;
-    [SerializeField] private Image defenseTypeBg; // 배경
+    [SerializeField] private Image defenseTypeBg; 
 
     [Header("Refs - Texts")]
     [SerializeField] private TMP_Text roleText;
     [SerializeField] private TMP_Text positionText;
 
-    // ⭐ 각 아이콘별 로더 (복잡한 토큰 로직은 얘가 다 처리함)
+    
     private readonly AtlasImageBinder _affiliationBinder = new();
     private readonly AtlasImageBinder _roleBinder = new();
     private readonly AtlasImageBinder _tacticalBinder = new();
     private readonly AtlasImageBinder _attackBinder = new();
     private readonly AtlasImageBinder _defenseBinder = new();
 
-    // 초상화 로딩용 토큰 (초상화는 Atlas가 아니라 개별 로드라 따로 관리)
+    
     private int _portraitToken;
     private Action<int> _onClickIndex;
     private int _boundIndex;
 
-    public void OnRent() { } // 풀링 초기화 (필요 시)
+    public void OnRent() { } 
 
     public void OnReturn()
     {
-        // 1. 모든 로더 취소 (잔상 제거)
+        
         _affiliationBinder.Release(affiliationIcon);
         _roleBinder.Release(roleTypeIcon);
         _tacticalBinder.Release(tacticalRoleIcon);
         _attackBinder.Release(attackTypeIcon);
         _defenseBinder.Release(defenseTypeIcon);
         
-        // 2. 배경 및 텍스트 초기화 덜됐음
+        
         if (attackTypeBg) attackTypeBg.gameObject.SetActive(false);
         if (defenseTypeBg) defenseTypeBg.gameObject.SetActive(false);
         if (portraitIcon) { portraitIcon.sprite = null; portraitIcon.enabled = false; }
         
-        // 3. 버튼 연결 해제
+        
         if (button) button.onClick.RemoveAllListeners();
 
-        // 4. 선택(확인 대기) 하이라이트도 재사용 전에 초기화
+        
         SetSelected(false);
 
-        //gameObject.SetActive(false); -<제어x
+        
     }
 
-    // 메인 바인딩 함수
+    
     public void Bind(int dataIndex, in CharacterViewData data, Action<int> onClick, CharacterArtProvider artProvider, bool isDraftUnavailable = false, bool isSelected = false)
     {
         _boundIndex = dataIndex;
         _onClickIndex = onClick;
 
-        // 1. 기본 텍스트 및 상태 설정
+        
         SetNameAndStats(data);
         UpdateRarityStars(data.Rarity);
         ApplyLockOverlay(data.IsLocked, isDraftUnavailable);
         SetSelected(isSelected);
 
-        // 2. 아이콘 로딩 (로더에게 위임)
+        
         LoadIcons(data);
 
-        // 3. 초상화 로딩
+        
         LoadPortrait(data.Id, artProvider);
 
-        // 4. 클릭 이벤트 연결
+        
         if (button)
         {
             button.onClick.RemoveAllListeners();
@@ -104,17 +104,17 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         }
     }
 
-    /// <summary>
-    /// 드래프트 진행 중 특정 캐릭터가 밴/픽되어 더 이상 선택 불가능해졌을 때,
-    /// 재바인딩 없이 오버레이만 갱신하고 싶을 때 사용 (선택적 최적화용).
-    /// 보통은 CharacterGridViewAdapter가 Bind() 시점에 isDraftUnavailable을 같이 넘겨준다.
-    /// </summary>
+    
+    
+    
+    
+    
     public void SetDraftUnavailable(bool isDraftUnavailable) => ApplyLockOverlay(_lastIsLocked, isDraftUnavailable);
 
-    /// <summary>
-    /// 밴/픽 후보로 클릭됐지만 아직 확인 버튼을 누르기 전인지 표시.
-    /// (실제 밴/픽 제출은 확인 버튼에서 이루어지므로, 이건 순수 시각적 표시일 뿐이다)
-    /// </summary>
+    
+    
+    
+    
     public void SetSelected(bool isSelected)
     {
         if (selectionHighlight) selectionHighlight.SetActive(isSelected);
@@ -133,7 +133,7 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
 
         if (shouldShow)
         {
-            // 드래프트 사용 상태를 우선 표시 (밴/픽된 캐릭터라는 정보가 더 즉각적으로 중요함)
+            
             lockOverlay.color = isDraftUnavailable ? draftUnavailableOverlayColor : lockedOverlayColor;
         }
     }
@@ -148,33 +148,33 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
 
     private void LoadIcons(in CharacterViewData data)
     {
-        // 학원 로고
+        
         _affiliationBinder.Bind(
             affiliationIcon, 
-            UIExtensions.ATLAS_AFFILIATION, // 상수도 확장클래스에서 가져옴
+            UIExtensions.ATLAS_AFFILIATION, 
             data.Affiliation.ToSpriteName()
         );
 
-        // 역할 아이콘
+        
         _roleBinder.Bind(
             roleTypeIcon, 
             UIExtensions.ATLAS_COMMON, 
             data.Role.ToSpriteName(), 
-            (img) => img.color = Color.black // 특정 스타일링은 남겨둘 수 있음
+            (img) => img.color = Color.black 
         );
 
-        // 전술 역할
+        
         _tacticalBinder.Bind(
             tacticalRoleIcon, 
             UIExtensions.ATLAS_COMMON, 
             data.TacticalRole.ToSpriteName()
         );
 
-        // 로컬 변수 캡처 (람다)
+        
         var myAttack = data.AttackType;
         var myDefense = data.DefenseType;
         
-        // 공격 타입
+        
         _attackBinder.Bind(
             attackTypeIcon, 
             UIExtensions.ATLAS_COMMON, 
@@ -182,12 +182,12 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
             (img) => 
             {
                 img.color = Color.white;
-                // 확장 메서드 활용
+                
                 SetBackground(attackTypeBg, myAttack.GetThemeColor()); 
             }
         );
 
-        // 방어 타입
+        
         _defenseBinder.Bind(
             defenseTypeIcon, 
             UIExtensions.ATLAS_COMMON, 
@@ -200,7 +200,7 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         );
     }
 
-    // 배경색
+    
     private void SetBackground(Image bg, Color color)
     {
         if (bg == null) return;
@@ -238,15 +238,15 @@ public sealed partial class CharacterSlotView : MonoBehaviour, IUIReusable
         }
     }
 
-    // -----------------------
-    // * - Atlas icon binding - *
-    // -----------------------
+    
+    
+    
     
     public void SetVisible(bool visible) => gameObject.SetActive(visible);
 
     private void OnDisable()
     {
-        // 풀링/가상화 잔상 방지
+        
         ClearAllVisuals();
     }
 

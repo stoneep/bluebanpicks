@@ -3,15 +3,11 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
-// ── 1. 범용 Sprite Provider ──
 public sealed class AddressableSpriteProvider<TVariant> where TVariant : System.Enum
 {
     private readonly Dictionary<string, AsyncOperationHandle<Sprite>> _cache = new();
     private readonly System.Func<string, TVariant, string> _keyBuilder;
-
-    /// <summary>
-    /// keyBuilder: (id, variant) → Addressable key 문자열
-    /// </summary>
+    
     public AddressableSpriteProvider(System.Func<string, TVariant, string> keyBuilder)
     {
         _keyBuilder = keyBuilder;

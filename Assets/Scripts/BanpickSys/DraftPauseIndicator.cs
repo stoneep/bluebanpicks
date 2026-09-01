@@ -3,21 +3,21 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// 드래프트 도중 "완전 정지"를 위한 보험용 UI.
-///
-/// 다른 타이머 뷰들(DraftTimerIndicatorBase 계열)은 "특정 DraftSessionState 하나일 때만
-/// 보이는 텍스트"라는 단일 목적이라 그 베이스를 그대로 썼지만, 이 컴포넌트는
-///  - Loading/InProgress 두 상태에 걸쳐 버튼이 떠 있어야 하고,
-///  - 오버레이 표시는 State가 아니라 IsPaused 값 자체로 토글되고,
-///  - 버튼 활성화 여부가 "로컬 클라이언트가 호스트/참가자인가"라는 별도 조건에 달려 있어서
-/// 상속 구조를 억지로 맞추기보다 DraftBoardController 등과 같은 Bind/Unbind 관례만
-/// 따르는 독립 컴포넌트로 분리했다.
-///
-/// 권한(호스트 또는 배정된 선공/후공 참가자만 토글 가능)은 최종적으로 서버(DraftSessionServer.
-/// RequestPauseServerRpc)가 검증한다 - 여기서 버튼을 막아두는 건 UX상의 편의일 뿐,
-/// 신뢰 경계는 항상 서버 쪽에 있다.
-/// </summary>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 public class DraftPauseIndicator : MonoBehaviour
 {
     [Header("Session")]
@@ -82,7 +82,7 @@ public class DraftPauseIndicator : MonoBehaviour
             return;
         }
 
-        DraftSessionServer.OnSessionReady -= Bind; // Start()의 안전망 구독이었다면 여기서 정리
+        DraftSessionServer.OnSessionReady -= Bind; 
 
         if (session != null) Unbind();
         session = newSession;
@@ -110,8 +110,8 @@ public class DraftPauseIndicator : MonoBehaviour
     {
         if (session == null) return;
 
-        // 이 버튼은 "일시정지 요청" 전용이다. 실제 반영은 서버 승인
-        // (IsPaused.OnValueChanged) 이후에야 일어난다.
+        
+        
         session.RequestPauseServerRpc(true);
     }
 
@@ -119,8 +119,8 @@ public class DraftPauseIndicator : MonoBehaviour
     {
         if (session == null) return;
 
-        // 이 버튼은 "재개 요청" 전용이다. 실제 반영은 서버 승인
-        // (IsPaused.OnValueChanged) 이후에야 일어난다.
+        
+        
         session.RequestPauseServerRpc(false);
     }
 
@@ -139,8 +139,8 @@ public class DraftPauseIndicator : MonoBehaviour
         bool isPaused = session.IsPaused.Value;
         bool canToggle = IsLocalClientHostOrParticipant();
 
-        // 평상시엔 pauseButton만, 일시정지 중엔 resumeButton만 보인다.
-        // resumeButton은 overlayRoot의 자식이라 오버레이가 켜져 있는 동안에만 실제로 노출/클릭 가능하다.
+        
+        
         SetPauseButtonVisible(isPauseUsableState && !isPaused);
         SetResumeButtonVisible(isPauseUsableState && isPaused);
 
@@ -154,7 +154,7 @@ public class DraftPauseIndicator : MonoBehaviour
         if (overlayText) overlayText.text = overlayFormat;
     }
 
-    /// <summary>호스트(ServerClientId) 또는 배정된 선공/후공 참가자인지. 서버 쪽 최종 검증의 UX 미러링용.</summary>
+    
     private bool IsLocalClientHostOrParticipant()
     {
         var localId = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : ulong.MaxValue;

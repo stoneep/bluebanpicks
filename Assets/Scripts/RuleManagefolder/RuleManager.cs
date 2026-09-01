@@ -7,16 +7,6 @@ public enum DraftResultType
     Pick
 }
 
-/// <summary>
-/// 드래프트 전체 진행을 담당. IDraftFormat만 의존하므로
-/// 에디터 프리셋(DraftFormatSO)이든 대기실에서 조립한 런타임 데이터(DraftFormatData)든
-/// 동일하게 넘겨서 쓸 수 있다.
-///
-/// 라운드(IDraftFormat.Rounds) 하나당 Ban 페이즈 1개 + Pick 페이즈 1개를 순서대로 만들고,
-/// 각 라운드의 startingSide/banOrderPattern/pickOrderPattern에 따라 턴 순서가 결정된다.
-/// 즉 "전반전은 선공부터, 후반전은 후공부터" 같은 규칙은 코드가 아니라
-/// 라운드 설정(DraftRoundConfig) 값만으로 표현된다.
-/// </summary>
 public sealed class RuleManager
 {
     public event Action<IDraftPhase> OnPhaseChanged;

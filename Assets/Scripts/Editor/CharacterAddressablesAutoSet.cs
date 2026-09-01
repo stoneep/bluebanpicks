@@ -9,21 +9,11 @@ using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
 using UnityEngine;
 
-/// <summary>
-/// 캐릭터 초상화 스프라이트에 Addressable 주소를 자동 할당합니다.
-/// 
-/// 파일명 규칙:
-///   Student_Portrait_{Id}            → char/{Id}/portrait_large
-///   Student_Portrait_{Id}_Small      → char/{Id}/portrait_small
-///   Student_Portrait_{Id}_Collection → char/{Id}/portrait_collection
-///   Student_Portrait_{Id}_Slot       → char/{Id}/portrait_slot
-/// </summary>
 public static class CharacterAddressablesAutoSet
 {
     private const string DefaultRoot = "Assets/Art/Characters";
     private const string DefaultGroupName = "Characters";
-
-    // 접미사 → 주소 suffix 매핑 (접미사 없음 = portrait_large)
+    
     private static readonly Dictionary<string, string> SuffixToAddress = new(StringComparer.OrdinalIgnoreCase)
     {
         { "",           "portrait_large" },
@@ -120,15 +110,7 @@ public static class CharacterAddressablesAutoSet
         if (changedLog.Count > 0) Debug.Log(string.Join("\n", changedLog));
         if (errorLog.Count > 0) Debug.LogWarning(string.Join("\n", errorLog));
     }
-
-    /// <summary>
-    /// 파일명에서 캐릭터 ID와 주소 suffix를 추출합니다.
-    /// 
-    /// Student_Portrait_{Id}            → id, "portrait_large"
-    /// Student_Portrait_{Id}_Small      → id, "portrait_small"
-    /// Student_Portrait_{Id}_Collection → id, "portrait_collection"
-    /// Student_Portrait_{Id}_Slot       → id, "portrait_slot"
-    /// </summary>
+    
     private static bool TryParsePortraitFileName(string assetPath, out string id, out string addressSuffix)
     {
         id = null;
@@ -136,8 +118,7 @@ public static class CharacterAddressablesAutoSet
 
         var fileName = Path.GetFileNameWithoutExtension(assetPath);
         var parts = fileName.Split('_');
-
-        // 최소 3덩어리: Student_Portrait_{Id}
+        
         if (parts.Length < 3) return false;
 
         if (!parts[0].Equals("Student", StringComparison.OrdinalIgnoreCase) ||
@@ -146,13 +127,11 @@ public static class CharacterAddressablesAutoSet
 
         id = parts[2];
         if (string.IsNullOrWhiteSpace(id)) return false;
-
-        // 접미사 결정: 4번째 파트가 있으면 그것, 없으면 "" (portrait_large)
+        
         var suffix = parts.Length >= 4 ? parts[3] : "";
 
         if (!SuffixToAddress.TryGetValue(suffix, out addressSuffix))
         {
-            // 알 수 없는 접미사 → 스킵
             id = null;
             return false;
         }

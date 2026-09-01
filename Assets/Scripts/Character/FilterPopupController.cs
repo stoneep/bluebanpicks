@@ -10,7 +10,6 @@ public sealed class FilterPopupController : MonoBehaviour
     [SerializeField] private RoleFilterBar roleBar;
     [SerializeField] private AttackTypeFilterBar attackBar;
     [SerializeField] private DefenseTypeFilterBar defenseBar;
-    // [SerializeField] private PositionFilterBar positionBar;   // 추가
 
     [Header("Sort Type Buttons")]
     [SerializeField] private Button raritySortBtn;
@@ -19,7 +18,7 @@ public sealed class FilterPopupController : MonoBehaviour
     [SerializeField] private Button affiliationSortBtn;
     [SerializeField] private Button tacticalRoleSortBtn;
     [SerializeField] private Button orderToggleBtn;
-    [SerializeField] private RectTransform orderArrowIcon; // 화살표 아이콘 (회전용)
+    [SerializeField] private RectTransform orderArrowIcon;
 
     [Header("Control Buttons")]
     [SerializeField] private Button confirmButton;
@@ -30,7 +29,7 @@ public sealed class FilterPopupController : MonoBehaviour
     public event Action<CharacterFilterContext> OnApply;
 
     private CharacterFilterContext tempContext;
-    private CharacterFilterContext originalContext; // 취소 시 복원용
+    private CharacterFilterContext originalContext;
 
     private void Awake()
     {
@@ -52,7 +51,7 @@ public sealed class FilterPopupController : MonoBehaviour
     public void Open(CharacterFilterContext currentContext)
     {
         tempContext = currentContext;
-        originalContext = currentContext; // 취소 시 되돌아갈 스냅샷
+        originalContext = currentContext;
         
         SyncAllVisuals();
         
@@ -71,14 +70,12 @@ public sealed class FilterPopupController : MonoBehaviour
         UpdateSortButtonVisuals(); 
     }
     
-    // 정렬 타입 변경
     private void SetSort(CharacterSortType type)
     {
         tempContext.SortType = type;
         UpdateSortButtonVisuals();
     }
     
-    // 정렬 순서 토글
     private void ToggleOrder()
     {
         tempContext.SortOrder = (tempContext.SortOrder == SortOrder.Ascending) 
@@ -98,13 +95,10 @@ public sealed class FilterPopupController : MonoBehaviour
     
     private void UpdateSortButtonVisuals()
     {
-        // UIStylePalette 등을 사용하여 버튼 색상 변경 로직
-        // 예: raritySortBtn.image.color = (tempContext.SortType == ByRarity) ? Selected : Normal;
     }
 
     public void OnClickConfirm()
     {
-        // 완성된 박스를 배달
         OnApply?.Invoke(tempContext);
         gameObject.SetActive(false);
     }
@@ -118,14 +112,12 @@ public sealed class FilterPopupController : MonoBehaviour
     
     public void OnClickReset()
     {
-        // 기본값 박스를 배달
         OnApply?.Invoke(CharacterFilterContext.Default);
         gameObject.SetActive(false);
     }
     
     private void InitializeSortButtons()
     {
-        // 람다식으로 깔끔하게 연결
         raritySortBtn?.onClick.AddListener(() => SetSort(CharacterSortType.ByRarity));
         levelSortBtn?.onClick.AddListener(() => SetSort(CharacterSortType.ByLevel));
         nameSortBtn?.onClick.AddListener(() => SetSort(CharacterSortType.ByName));

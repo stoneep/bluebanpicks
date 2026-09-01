@@ -150,7 +150,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AspectRatioWindowLock
   aspectWidth: 16
   aspectHeight: 9
-  verboseLogging: 1
+  verboseLogging: 0
 --- !u!4 &31461829
 Transform:
   m_ObjectHideFlags: 0

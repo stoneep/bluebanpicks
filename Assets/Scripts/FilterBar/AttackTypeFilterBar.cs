@@ -17,7 +17,6 @@ public class AttackTypeFilterBar : DynamicFilterBar<AttackType>
             return FilterButtonMediatorFactory.CreateTextBgSwap(Palette.DeepBlue);
         }
         
-        // Generic Mediator가 자동으로 GetThemeColor() 호출
         //return FilterButtonMediatorFactory.CreateGenericIconBgSwap(value.Value);
         return FilterButtonMediatorFactory.CreateIconBgColorSwap(value.Value.GetThemeColor());
     }

@@ -11,5 +11,3 @@ public static class LocalizationExtensions
     }
 }
 
-// --- 실제 사용 시 ---
-// nameText.text = itemData.NameKey.Localize();

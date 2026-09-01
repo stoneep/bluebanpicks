@@ -4,7 +4,6 @@ using UnityEngine.UI;
 using UnityEngine.U2D;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
-// 아틀라스에서 이미지를 꺼내 UI에 바인딩 (에러 핸들링 강화)
 public class AtlasImageBinder
 {
     private int _token = 0;
@@ -53,13 +52,10 @@ public class AtlasImageBinder
 
         void OnLoaded(AsyncOperationHandle<SpriteAtlas> h)
         {
-            // 토큰 검증 (이미 취소되었으면 무시)
             if (_token != currentToken) return;
             
-            // 타겟이 파괴되었는지 확인
             if (target == null) return;
-
-            // 로드 실패 체크
+            
             if (h.Status != AsyncOperationStatus.Succeeded)
             {
                 Debug.LogWarning($"[AtlasImageBinder] Failed to load atlas '{atlasKey}'. Status: {h.Status}");
@@ -120,7 +116,7 @@ public class AtlasImageBinder
 
     public void Release(Image target)
     {
-        _token++; // 진행 중인 로딩 무효화
+        _token++;
         if (target != null)
         {
             try

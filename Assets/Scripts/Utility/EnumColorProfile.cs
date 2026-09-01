@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// Enum 키 -> Color 값 매핑 데이터만 저장함
 public abstract class EnumColorProfile<T> : ScriptableObject where T : struct, Enum
 {
     [Serializable]
@@ -13,8 +12,6 @@ public abstract class EnumColorProfile<T> : ScriptableObject where T : struct, E
     }
 
     [SerializeField] private List<Entry> settings;
-
-    // Lazy Initialization
     private Dictionary<T, Color> map;
 
     public Color GetColor(T type, Color defaultColor)

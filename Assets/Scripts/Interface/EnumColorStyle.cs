@@ -16,7 +16,6 @@ public class EnumColorStyle : IFilterButtonStyle
 
     public Color GetColor(Enum filterValue, bool isSelected)
     {
-        // enum 고유 색상 반환 (선택 여부 무시)
         return _colorMap.TryGetValue(filterValue, out var color) 
             ? color 
             : Color.white;

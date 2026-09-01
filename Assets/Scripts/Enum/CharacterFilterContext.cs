@@ -3,20 +3,17 @@ using System;
 [Serializable]
 public struct CharacterFilterContext
 {
-    // 1. 필터 데이터
     public Affiliation? Affiliation;
     public TacticalRole? TacticalRole;
-    public Role? Role;           // 추가
-    public AttackType? AttackType; // 추가
-    public DefenseType? DefenseType; // 추가
-    public Position? Position;   // 추가
-    public string SearchText;    // 추가: 이름 검색어
-
-    // 2. 정렬 데이터
+    public Role? Role;
+    public AttackType? AttackType;
+    public DefenseType? DefenseType;
+    public Position? Position;
+    public string SearchText;
+    
     public CharacterSortType SortType;
     public SortOrder SortOrder;
     
-    // 3. 기본값(리셋용)
     public static CharacterFilterContext Default => new CharacterFilterContext
     {
         Affiliation = null,

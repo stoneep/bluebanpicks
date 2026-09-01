@@ -27,11 +27,11 @@ public sealed class InDraftTurnTimerIndicator : DraftTimerIndicatorBase
 
     protected override void RenderContent()
     {
-        // turnTimeLimitSeconds가 0 이하로 설정되어 턴 타이머를 안 쓰는 구성이면 0이 유지되므로 둘 다 숨긴다.
+        
         bool hasTurnTimer = session.TurnSecondsRemaining.Value > 0f;
 
-        SetVisible(hasTurnTimer);                          // timerText(또는 root) 담당
-        if (turnText) turnText.gameObject.SetActive(hasTurnTimer); // turnText는 별도로 직접 토글
+        SetVisible(hasTurnTimer);                          
+        if (turnText) turnText.gameObject.SetActive(hasTurnTimer); 
 
         if (!hasTurnTimer) return;
 
@@ -47,7 +47,7 @@ public sealed class InDraftTurnTimerIndicator : DraftTimerIndicatorBase
         if (localSide.HasValue)
             return currentSide == localSide.Value ? "내 턴" : "상대 턴";
 
-        // 관전자(호스트) 등 배정 안 된 클라이언트
+        
         return currentSide == DraftSide.First ? "선공 턴" : "후공 턴";
     }
 }

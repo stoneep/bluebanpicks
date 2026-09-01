@@ -1,13 +1,6 @@
 using System;
 using UnityEngine;
 
-/// <summary>
-/// 드래프트 한 라운드(예: 전반전/후반전)의 밴/픽 슬롯 수와 시작 진영을 담는 순수 데이터.
-///
-/// DraftFormatSO(에디터 프리셋)와 DraftFormatData(대기실에서 조립하는 런타임 데이터)가
-/// 이 클래스를 공유해서 쓴다. 필드가 전부 primitive/string이라
-/// 나중에 NGO의 INetworkSerializable(struct)로 옮길 때도 그대로 재사용 가능하도록 설계했다.
-/// </summary>
 [Serializable]
 public class DraftRoundConfig
 {
@@ -59,11 +52,7 @@ public class DraftRoundConfig
         this.banOrderPattern = banOrderPattern;
         this.pickOrderPattern = pickOrderPattern;
     }
-
-    /// <summary>
-    /// 반대 진영이 시작하는 동일한 라운드를 복제 생성.
-    /// "후반전은 전반전 이니셔티브를 반전"같은 대기실 UI 버튼에 바로 쓰기 좋음.
-    /// </summary>
+    
     public DraftRoundConfig WithFlippedInitiative(string newRoundName = null) => new DraftRoundConfig(
         firstBanSlots, secondBanSlots,
         firstPickSlots, secondPickSlots,

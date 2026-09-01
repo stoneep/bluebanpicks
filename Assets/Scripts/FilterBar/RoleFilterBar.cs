@@ -10,8 +10,7 @@ public class RoleFilterBar : DynamicFilterBar<Role>
 
     protected override string GetSpriteName(Role value) =>
         $"role_{value.ToString().ToLowerInvariant()}";
-
-    // All 버튼에 "ALL" 텍스트 사용 (아이콘 없음 -> 자동으로 텍스트 모드)
+    
     protected override string GetAllButtonText() => "ALL";
 
     protected override IFilterButtonMediator CreateButtonMediator(Role? value)

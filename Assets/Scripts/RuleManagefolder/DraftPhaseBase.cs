@@ -40,10 +40,6 @@ public abstract class DraftPhaseBase : IDraftPhase
 
     public void Enter()
     {
-        // turnOrder가 SequenceTurnOrderRule이면, 이 페이즈의 슬롯 수와
-        // 시퀀스 구성(First/Second 개수)이 일치하는지 시작 시점에 미리 검증한다.
-        // 안 맞으면 여기서 바로 예외가 터지므로, 플레이 도중 마지막 값 반복/루프로
-        // 조용히 동작이 이상해지는 상황을 막는다.
         if (turnOrder is SequenceTurnOrderRule sequenceRule)
         {
             sequenceRule.Validate(slotCounts[DraftSide.First], slotCounts[DraftSide.Second]);

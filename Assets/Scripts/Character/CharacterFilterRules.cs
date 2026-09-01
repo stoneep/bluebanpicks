@@ -1,11 +1,11 @@
 ﻿
-// 필터 규칙 관리
+
 public class CharacterFilterRules
 {
-    // affiliation 필터 전용 클래스
+    
     public readonly AffiliationFilterRule Affiliation = new();
 
-    // 그외 GenericFilterRule 람다식
+    
     public readonly GenericFilterRule<CharacterViewData, TacticalRole> TacticalRole 
         = new(item => item.TacticalRole);
 
@@ -18,11 +18,11 @@ public class CharacterFilterRules
     public readonly GenericFilterRule<CharacterViewData, Position> Position 
         = new(item => item.Position);
 
-    // 이름 검색 (영문/한글 표기 + Id 대상, 초성 검색 지원)
+    
     public readonly TextSearchFilterRule<CharacterViewData> Search
         = new(item => new[] { item.DisplayNameEn, item.DisplayNameKr});
-    //    = new(item => new[] { item.DisplayNameEn, item.DisplayNameKr, item.Id });
-    // Context(데이터 박스)를 받아서 모든 규칙에 적용
+    
+    
     public void Apply(CharacterFilterContext context)
     {
         Affiliation.Set(context.Affiliation);
@@ -34,7 +34,7 @@ public class CharacterFilterRules
         Search.Set(context.SearchText);
     }
 
-    // 현재 규칙들의 상태를 Context에 채워 넣기 (스냅샷 찍기)
+    
     public void WriteTo(ref CharacterFilterContext context)
     {
         context.Affiliation = Affiliation.Current;
@@ -44,7 +44,7 @@ public class CharacterFilterRules
         context.SearchText = Search.Term;
     }
 
-    // 모든 규칙을 필터 상태(State)에 등록하는 헬퍼 함수
+    
     public void RegisterTo(CharacterFilterState state)
     {
         state.AddRule(Affiliation);

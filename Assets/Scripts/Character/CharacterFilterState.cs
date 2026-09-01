@@ -14,7 +14,7 @@ public sealed class CharacterFilterState
     public void AddRule(IFilterRule<CharacterViewData> rule)
     {
         rules.Add(rule);
-        if (rule is TextSearchFilterRule<CharacterViewData> textRule) // ★ 추가
+        if (rule is TextSearchFilterRule<CharacterViewData> textRule) 
             searchRule = textRule;
     }
 
@@ -24,15 +24,15 @@ public sealed class CharacterFilterState
     
     public Comparison<CharacterViewData> GetComparison()
     {
-        bool useRelevance = searchRule != null && !string.IsNullOrEmpty(searchRule.Term); // ★ 추가
+        bool useRelevance = searchRule != null && !string.IsNullOrEmpty(searchRule.Term); 
 
         return (a, b) =>
         {
-            if (useRelevance) // ★ 추가
+            if (useRelevance) 
             {
                 int relA = searchRule.GetRelevance(a);
                 int relB = searchRule.GetRelevance(b);
-                if (relA != relB) return relA.CompareTo(relB); // 관련도 높은 순, Order 영향 안 받음
+                if (relA != relB) return relA.CompareTo(relB); 
             }
 
             int result = CompareBySelectedType(a, b);

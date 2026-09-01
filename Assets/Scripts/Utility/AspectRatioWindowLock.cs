@@ -7,13 +7,6 @@ using AOT;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
-/// <summary>
-/// 빌드된 Windows 스탠드얼론 창을 마우스로 리사이즈할 때
-/// 지정한 가로:세로 비율을 유지하도록 강제하는 컴포넌트.
-///
-/// - 에디터 Play 모드에서는 동작하지 않으며, 실제 빌드된 exe(Windows Standalone)에서만 동작합니다.
-/// - 씬에 빈 GameObject를 만들어 이 스크립트를 붙이고, DontDestroyOnLoad로 유지하는 것을 권장합니다.
-/// </summary>
 public class AspectRatioWindowLock : MonoBehaviour
 {
     [Header("고정할 비율 (예: 16:9 -> 16, 9)")]
@@ -26,8 +19,7 @@ public class AspectRatioWindowLock : MonoBehaviour
 
     private const int GWL_WNDPROC = -4;
     private const int WM_SIZING = 0x0214;
-
-    // WM_SIZING의 wParam으로 오는 드래그 방향
+    
     private const int WMSZ_LEFT = 1;
     private const int WMSZ_RIGHT = 2;
     private const int WMSZ_TOP = 3;
@@ -45,12 +37,10 @@ public class AspectRatioWindowLock : MonoBehaviour
 
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-    // 새 WndProc(델리게이트)을 심을 때 사용하는 오버로드
+    
     [DllImport("user32.dll", CharSet = CharSet.Auto, EntryPoint = "SetWindowLongPtr")]
     private static extern IntPtr SetWindowLongPtr_Delegate(IntPtr hWnd, int nIndex, WndProcDelegate newProc);
-
-    // 기존 WndProc(IntPtr)를 복구할 때 사용하는 오버로드
+    
     [DllImport("user32.dll", CharSet = CharSet.Auto, EntryPoint = "SetWindowLongPtr")]
     private static extern IntPtr SetWindowLongPtr_Ptr(IntPtr hWnd, int nIndex, IntPtr newProc);
 
@@ -71,11 +61,9 @@ public class AspectRatioWindowLock : MonoBehaviour
 
     private IntPtr hWnd = IntPtr.Zero;
     private IntPtr prevWndProc = IntPtr.Zero;
-    private WndProcDelegate newWndProcDelegate; // GC 방지를 위해 반드시 필드로 보관
+    private WndProcDelegate newWndProcDelegate;
     private bool hookInstalled = false;
-
-    // IL2CPP은 인스턴스 메서드를 가리키는 델리게이트를 네이티브로 마샬링하지 못하므로,
-    // 콜백은 반드시 static이어야 하고, 인스턴스 상태는 이 static 참조를 통해 접근한다.
+    
     private static AspectRatioWindowLock s_instance;
 
     void Start()
@@ -93,9 +81,8 @@ public class AspectRatioWindowLock : MonoBehaviour
     private IEnumerator InstallHookWhenReady()
     {
         int attempts = 0;
-        const int maxAttempts = 180; // 약 3초 (60fps 기준)
-
-        // 1차: Process.MainWindowHandle로 시도 (가장 흔한 경우)
+        const int maxAttempts = 180;
+        
         while (hWnd == IntPtr.Zero && attempts < maxAttempts)
         {
             hWnd = Process.GetCurrentProcess().MainWindowHandle;
@@ -132,17 +119,10 @@ public class AspectRatioWindowLock : MonoBehaviour
             Debug.Log($"[AspectRatioWindowLock] 훅 설치 성공. hWnd={hWnd}, 비율={aspectWidth}:{aspectHeight}");
         }
     }
-
-    // EnumWindows 콜백에서 결과를 주고받기 위한 static 상태.
-    // 클로저(람다) 캡처는 IL2CPP에서 네이티브로 마샬링이 불안정할 수 있어
-    // static 필드 + static 콜백 방식으로 처리한다.
+    
     private static uint s_targetPid;
     private static IntPtr s_foundWindow;
-
-    /// <summary>
-    /// MainWindowHandle이 0을 반환하는 드문 경우를 위한 폴백.
-    /// 현재 프로세스 ID를 가진 보이는(Visible) 창 중 제목이 있는 첫 창을 찾는다.
-    /// </summary>
+    
     private IntPtr FindWindowByProcessId()
     {
         s_targetPid = (uint)Process.GetCurrentProcess().Id;
@@ -157,27 +137,23 @@ public class AspectRatioWindowLock : MonoBehaviour
     private static bool EnumWindowsCallback(IntPtr wnd, IntPtr param)
     {
         GetWindowThreadProcessId(wnd, out uint pid);
-        if (pid != s_targetPid) return true; // 계속 탐색
+        if (pid != s_targetPid) return true;
 
         if (!IsWindowVisible(wnd)) return true;
 
         StringBuilder sb = new StringBuilder(256);
         GetWindowText(wnd, sb, sb.Capacity);
-        if (sb.Length == 0) return true; // 제목 없는 창은 스킵 (보통 숨겨진 헬퍼 창)
+        if (sb.Length == 0) return true;
 
         s_foundWindow = wnd;
-        return false; // 찾았으니 중단
+        return false;
     }
-
-    // IL2CPP은 인스턴스 메서드를 네이티브 함수 포인터로 마샬링하지 못하므로
-    // 반드시 static이어야 한다. [MonoPInvokeCallback]은 AOT 컴파일 시
-    // 이 메서드가 네이티브 콜백 진입점임을 명시해 트리밍/최적화에서 누락되지 않게 한다.
+    
     [MonoPInvokeCallback(typeof(WndProcDelegate))]
     private static IntPtr WndProcHookStatic(IntPtr hWndParam, uint msg, IntPtr wParam, IntPtr lParam)
     {
         if (s_instance == null)
         {
-            // 인스턴스가 없으면(예: 파괴된 이후 콜백이 들어온 예외적 상황) 아무 처리도 하지 않고 넘긴다.
             return IntPtr.Zero;
         }
 
@@ -199,14 +175,12 @@ public class AspectRatioWindowLock : MonoBehaviour
             {
                 case WMSZ_LEFT:
                 case WMSZ_RIGHT:
-                    // 좌우로만 드래그 중 -> 높이를 비율에 맞게 조정
                     height = Mathf.RoundToInt(width / ratio);
                     rect.Bottom = rect.Top + height;
                     break;
 
                 case WMSZ_TOP:
                 case WMSZ_BOTTOM:
-                    // 상하로만 드래그 중 -> 너비를 비율에 맞게 조정
                     width = Mathf.RoundToInt(height * ratio);
                     rect.Right = rect.Left + width;
                     break;
@@ -216,7 +190,6 @@ public class AspectRatioWindowLock : MonoBehaviour
                 case WMSZ_BOTTOMLEFT:
                 case WMSZ_BOTTOMRIGHT:
                 default:
-                    // 모서리 드래그 -> 너비 기준으로 높이 맞춤
                     height = Mathf.RoundToInt(width / ratio);
                     if (side == WMSZ_TOPLEFT || side == WMSZ_TOPRIGHT)
                         rect.Top = rect.Bottom - height;
@@ -231,7 +204,7 @@ public class AspectRatioWindowLock : MonoBehaviour
             }
 
             Marshal.StructureToPtr(rect, lParam, true);
-            return new IntPtr(1); // TRUE 반환 -> 우리가 rect를 수정했음을 알림
+            return new IntPtr(1);
         }
 
         return CallWindowProc(prevWndProc, hWndParam, msg, wParam, lParam);
@@ -243,7 +216,6 @@ public class AspectRatioWindowLock : MonoBehaviour
 #if !UNITY_EDITOR && UNITY_STANDALONE_WIN
         if (hookInstalled && hWnd != IntPtr.Zero && prevWndProc != IntPtr.Zero)
         {
-            // 델리게이트가 아닌 IntPtr 오버로드로 원래 WndProc 복구
             SetWindowLongPtr_Ptr(hWnd, GWL_WNDPROC, prevWndProc);
             Debug.Log("[AspectRatioWindowLock] 원래 WndProc로 복구 완료.");
         }

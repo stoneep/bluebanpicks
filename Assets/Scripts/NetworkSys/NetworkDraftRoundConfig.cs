@@ -2,19 +2,6 @@ using System;
 using Unity.Collections;
 using Unity.Netcode;
 
-/// <summary>
-/// DraftRoundConfig(class, string 필드 포함)의 네트워크 전송용 대응 구조체.
-///
-/// NGO의 NetworkList&lt;T&gt;/NetworkVariable&lt;T&gt;(단순 값 래핑 경로)는
-/// unmanaged 타입만 담을 수 있어서 System.string을 가진 클래스를 그대로 실을 수 없다.
-/// 그래서:
-///  - 에디터 인스펙터, JSON, 게임 로직(RuleManager 등)은 계속 DraftRoundConfig(class)를 쓰고
-///  - "네트워크 경계를 넘는 순간"에만 이 struct로 변환한다.
-///
-/// FixedString32/64Bytes를 쓰므로 라운드 이름은 대략 29자, 패턴 문자열은 대략 61자까지
-/// 담을 수 있다(둘 다 이 프로젝트의 실제 사용 범위보다 넉넉함). 이 길이를 넘는 값은
-/// ToNetwork()에서 잘려 들어가므로, 대기실 UI에서 입력 길이를 미리 제한해두는 걸 권장.
-/// </summary>
 public struct NetworkDraftRoundConfig : INetworkSerializable, IEquatable<NetworkDraftRoundConfig>
 {
     public FixedString32Bytes roundName;

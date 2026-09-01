@@ -6,7 +6,7 @@ public sealed class CharacterListBootstrap : MonoBehaviour
     [SerializeField] private CharacterListPanelController listController;
     [SerializeField] private TextAsset charDatabaseJson;
     [SerializeField] private GameLanguage language = GameLanguage.Korean;
-    [SerializeField] private TextAsset patchJson; // optional
+    [SerializeField] private TextAsset patchJson; 
     
     private void Start()
     {

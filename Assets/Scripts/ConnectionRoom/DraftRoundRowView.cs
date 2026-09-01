@@ -3,12 +3,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>
-/// 대기실 라운드 목록의 행(row) 하나. 슬롯 수/시작 진영을 표시하고,
-/// 호스트에게는 입력 가능한 필드로, 게스트에게는 SetInteractable(false)로 읽기 전용으로 보여준다.
-/// 이 컴포넌트는 서버에 아무것도 직접 쓰지 않는다 - 값이 바뀌면 OnEdited만 발행하고,
-/// 실제로 DraftSessionServer.HostSetFormat을 호출할지는 DraftLobbyController가 결정한다.
-/// </summary>
 public class DraftRoundRowView : MonoBehaviour
 {
     [SerializeField] private TMP_InputField roundNameField;
@@ -16,7 +10,7 @@ public class DraftRoundRowView : MonoBehaviour
     [SerializeField] private TMP_InputField secondBanField;
     [SerializeField] private TMP_InputField firstPickField;
     [SerializeField] private TMP_InputField secondPickField;
-    [SerializeField] private TMP_Dropdown startingSideDropdown; // Option 0 = 선공, 1 = 후공
+    [SerializeField] private TMP_Dropdown startingSideDropdown;
     [Tooltip("비워두면 startingSide 기준 단순 교대. 채우면 이게 우선한다. 예: ABBAAB")]
     [SerializeField] private TMP_InputField banOrderPatternField;
     [SerializeField] private TMP_InputField pickOrderPatternField;
@@ -30,22 +24,15 @@ public class DraftRoundRowView : MonoBehaviour
     [Tooltip("DraftSessionServer.PostDraftDisplaySeconds. 밴/픽 종료 후 안내 카운트다운 시간(초). " +
              "0 이하면 카운트다운 대신 종료 시점부터의 경과 시간을 보여준다.")]
     [SerializeField] private TMP_InputField postDraftDisplayField;
-
-    /// <summary>라운드 필드(슬롯 수/패턴 등) 값이 바뀌었을 때 (호스트만 구독해서 서버에 반영하면 됨).</summary>
+    
     public event Action OnEdited;
-
-    /// <summary>
-    /// 타이머 필드(preDraftLoadBuffer/turnTimeLimit/postDraftDisplay) 값이 바뀌었을 때. 세션 전체
-    /// 공통값이므로 OnEdited와 분리했다 - 이 이벤트는 DraftFormatData가 아니라
-    /// DraftSessionServer.HostSetTimerSettings로 보내야 한다.
-    /// </summary>
+    
     public event Action OnTimerEdited;
-
-    /// <summary>삭제 버튼을 눌렀을 때.</summary>
+    
     public event Action OnRemoveRequested;
 
-    private bool suppressEvents; // Bind()로 값을 채우는 동안 OnEdited가 잘못 발화하지 않도록
-    private bool suppressTimerEvents; // BindTimers()로 값을 채우는 동안 OnTimerEdited가 잘못 발화하지 않도록
+    private bool suppressEvents;
+    private bool suppressTimerEvents;
 
     private void Awake()
     {
@@ -80,8 +67,7 @@ public class DraftRoundRowView : MonoBehaviour
         if (turnTimeLimitField != null) turnTimeLimitField.interactable = interactable;
         if (postDraftDisplayField != null) postDraftDisplayField.interactable = interactable;
     }
-
-    /// <summary>서버 값으로 UI를 채운다. 이 중에는 OnEdited가 발화하지 않는다.</summary>
+    
     public void Bind(DraftRoundConfig round)
     {
         suppressEvents = true;
@@ -97,12 +83,7 @@ public class DraftRoundRowView : MonoBehaviour
 
         suppressEvents = false;
     }
-
-    /// <summary>
-    /// 세션 공통 타이머 값으로 UI를 채운다. 이 중에는 OnTimerEdited가 발화하지 않는다.
-    /// 라운드별 값이 아니라 세션 전체 값이므로, 여러 행을 동시에 이 값으로 채워도 문제없다
-    /// (DraftLobbyController가 모든 행에 동일한 값을 넣어준다).
-    /// </summary>
+    
     public void BindTimers(float preDraftLoadBufferSeconds, float turnTimeLimitSeconds, float postDraftDisplaySeconds)
     {
         suppressTimerEvents = true;
@@ -113,14 +94,12 @@ public class DraftRoundRowView : MonoBehaviour
 
         suppressTimerEvents = false;
     }
-
-    /// <summary>지금 UI에 입력된 타이머 값을 읽어온다 (DraftSessionServer.HostSetTimerSettings에 보낼 때 사용).</summary>
+    
     public (float preDraftLoadBufferSeconds, float turnTimeLimitSeconds, float postDraftDisplaySeconds) ReadTimerValues() => (
         ParseNonNegativeFloat(preDraftLoadBufferField != null ? preDraftLoadBufferField.text : null),
         ParseNonNegativeFloat(turnTimeLimitField != null ? turnTimeLimitField.text : null),
         ParseNonNegativeFloat(postDraftDisplayField != null ? postDraftDisplayField.text : null));
-
-    /// <summary>지금 UI에 입력된 값을 DraftRoundConfig로 읽어온다 (서버에 보낼 때 사용).</summary>
+    
     public DraftRoundConfig ReadValue() => new DraftRoundConfig(
         ParseNonNegativeInt(firstBanField.text), ParseNonNegativeInt(secondBanField.text),
         ParseNonNegativeInt(firstPickField.text), ParseNonNegativeInt(secondPickField.text),
@@ -135,12 +114,7 @@ public class DraftRoundRowView : MonoBehaviour
         WarnIfPatternMismatched();
         OnEdited?.Invoke();
     }
-
-    /// <summary>
-    /// 패턴의 A/B 개수가 슬롯 수와 안 맞으면, 드래프트 시작 시 서버(SequenceTurnOrderRule.Validate)에서
-    /// 예외로 터지기 전에 편집 시점에 미리 콘솔로 경고한다. (인스펙터에 별도 경고 UI가 없다면
-    /// 이 로그가 유일한 신호이므로, 실사용 시엔 이 자리에 경고 아이콘/텍스트를 붙이는 걸 권장)
-    /// </summary>
+    
     private void WarnIfPatternMismatched()
     {
         WarnIfMismatched(banOrderPatternField.text, ParseNonNegativeInt(firstBanField.text), ParseNonNegativeInt(secondBanField.text), "밴");

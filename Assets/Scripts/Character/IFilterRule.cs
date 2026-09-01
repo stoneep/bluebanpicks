@@ -7,7 +7,6 @@ public interface IFilterRule<T>
     bool IsSatisfiedBy(T item);
 }
 
-// SRP
 public class AffiliationFilterRule : IFilterRule<CharacterViewData>
 {
     private readonly FilterSet<Affiliation> filterSet = new();

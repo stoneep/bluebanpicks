@@ -4,15 +4,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-// ─────────────────────────────────────────────
-// CharacterSearchBar.cs
-// 캐릭터 이름 검색 입력창
-//
-// - OnValueChanged 이벤트를 노출해 Controller에서 구독
-// - 타이핑마다 리스트를 리빌드하면 끊기므로 디바운스 적용
-//   TMP_InputField.onValueChanged는 조합 중에도 계속 들어오므로,
-//   Input.compositionString이 비어있지 않은 동안은 무조건 억제하고
-// ─────────────────────────────────────────────
 public sealed class CharacterSearchBar : MonoBehaviour
 {
     [Header("Refs")]
@@ -56,8 +47,7 @@ public sealed class CharacterSearchBar : MonoBehaviour
         raw ??= string.Empty;
 
         UpdateClearButtonVisibility(raw);
-
-        // 조합 중인 글자는 아직 "완성되지 않은" 값이므로 검색어로 내보내지 않는다.
+        
         if (IsComposing()) return;
 
         if (raw == lastRawSent) return;
