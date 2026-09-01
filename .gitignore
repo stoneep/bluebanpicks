@@ -55,7 +55,8 @@ ExportedObj/
 *.opendb
 *.VC.db
 *.png
-
+/[Aa]ssets/[Tt]ext[Mm]esh [Pp]ro/
+/[Aa]ssets/TextMesh Pro/
 Art/
 
 # Unity3D generated meta files
@@ -89,6 +90,7 @@ InitTestScene*.unity*
 /[Aa]ssets/TranslucentImage/
 /[Aa]ssets/BlendModes/
 /[Aa]ssets/Font/
+/[Aa]ssets/Editor/
 /[Aa]ssets/MainOffice/
 /[Aa]ssets/Resources/
 /[Aa]ssets/AddressableAssetsData/
