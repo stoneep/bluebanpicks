@@ -1122,8 +1122,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6139ea2742318c34f89c5fe9b2615669, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LobbyParticipantRowView
-  nameText: {fileID: 0}
-  roleDropdown: {fileID: 0}
+  nameText: {fileID: 4788307226171107716}
+  roleDropdown: {fileID: 7850008414271517701}
 --- !u!1 &7469470179245475848
 GameObject:
   m_ObjectHideFlags: 0
