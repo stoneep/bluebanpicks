@@ -1,86 +1,98 @@
-using System;
-using System.Collections.Generic;
 using TMPro;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
-/// 대기실 참가자 목록의 한 행. 클라이언트 ID/표시 이름과 현재 역할(관전자/선공/후공)을 보여주고,
-/// 호스트가 드롭다운으로 역할을 바꾸면 OnRoleChangeRequested를 발행한다.
+/// 대기실 참가자 목록의 행(row) 하나.
 ///
-/// 이 뷰는 상태를 스스로 들고 있지 않는다 - DraftRoundRowView와 같은 패턴으로,
-/// DraftLobbyController가 참가자 목록이 바뀔 때마다 Bind()로 다시 그려주는 "그리기 전용" 컴포넌트다.
-/// 실제 반영(NetworkVariable 갱신)은 컨트롤러가 이벤트를 받아 DraftSessionServer.HostSetParticipantRole로 요청한다.
+/// DraftSessionServer.Nicknames의 항목 하나(clientId + 닉네임)를 nameText에 표시한다.
+/// 역할(관전자/선공/후공)은 별도 리스트가 아니라 DraftSessionServer의 두 NetworkVariable
+/// (FirstSideClientId/SecondSideClientId)에서 그때그때 파생시킨다 - RoleIndicator와 동일한
+/// 설계 원칙. 그래서 이 컴포넌트는 Bind() 이후에도 스스로 그 두 변수를 구독해서 역할 표시만
+/// 갱신한다. 닉네임 자체가 바뀌는 경우(참가자 입/퇴장)는 DraftLobbyController가 행을 통째로
+/// 다시 만들어 처리하므로 이 클래스가 신경 쓸 필요 없다.
+///
+/// roleText / localIndicator는 선택 사항이다. 인스펙터에 비워두면 해당 부분만 조용히
+/// 생략된다(다른 뷰들과 동일하게 "참조 미할당 시 스킵" 원칙을 따름) - nameText 하나만
+/// 연결해도 최소 동작은 된다.
 /// </summary>
 public class LobbyParticipantRowView : MonoBehaviour
 {
-    // 드롭다운 인덱스 0/1/2 = 관전자/선공/후공. IndexToRole/RoleToIndex와 순서를 반드시 맞출 것.
-    private static readonly List<string> RoleOptions = new() { "관전자", "선공", "후공" };
-
     [SerializeField] private TMP_Text nameText;
-    [SerializeField] private TMP_Dropdown roleDropdown;
 
-    /// <summary>(clientId, 새로 선택된 역할) - role이 null이면 관전자.</summary>
-    public event Action<ulong, DraftSide?> OnRoleChangeRequested;
+    [Tooltip("선택 사항. 비워두면 역할 표시를 하지 않는다.")]
+    [SerializeField] private TMP_Text roleText;
 
-    private ulong clientId;
-    private bool suppressCallback; // Bind()로 값을 코드에서 맞출 때 onValueChanged가 재귀 호출되는 것을 막기 위함
+    [Tooltip("선택 사항. 이 행이 '나 자신'일 때만 활성화할 오브젝트(예: \"(나)\" 라벨). 비워두면 사용 안 함.")]
+    [SerializeField] private GameObject localIndicator;
 
-    private void Awake()
+    /// <summary>이 행이 표시 중인 참가자의 clientId.</summary>
+    public ulong ClientId { get; private set; }
+
+    private DraftSessionServer session;
+
+    /// <summary>
+    /// 서버에서 동기화된 닉네임으로 행을 채운다.
+    /// DraftLobbyController.RebuildParticipantRows()가 Nicknames를 순회하며 매번 호출한다.
+    /// </summary>
+    public void Bind(ulong clientId, string nickname)
     {
-        if (roleDropdown == null) return;
+        ClientId = clientId;
 
-        roleDropdown.ClearOptions();
-        roleDropdown.AddOptions(RoleOptions);
-        roleDropdown.onValueChanged.AddListener(HandleDropdownChanged);
+        if (nameText != null) nameText.text = nickname;
+
+        bool isLocal = NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClientId == clientId;
+        if (localIndicator != null) localIndicator.SetActive(isLocal);
+
+        BindSession();
+        RefreshRole();
     }
 
-    /// <summary>참가자 정보로 이 행을 채운다. currentRole이 null이면 관전자.</summary>
-    public void Bind(ulong id, string displayName, DraftSide? currentRole)
+    private void OnDisable() => UnbindSession();
+
+    /// <summary>
+    /// 역할은 닉네임과 별개로 언제든(진영 배정/재배정) 바뀔 수 있으므로, 행이 살아있는 동안
+    /// 세션의 두 NetworkVariable을 직접 구독해서 스스로 갱신한다.
+    /// </summary>
+    private void BindSession()
     {
-        clientId = id;
-        if (nameText) nameText.text = displayName;
-        SetDropdownValueWithoutNotify(RoleToIndex(currentRole));
+        if (session != null && session == DraftSessionServer.Instance) return; // 이미 같은 세션 구독 중
+
+        UnbindSession();
+
+        session = DraftSessionServer.Instance;
+        if (session == null) return;
+
+        session.FirstSideClientId.OnValueChanged += HandleSideAssignmentChanged;
+        session.SecondSideClientId.OnValueChanged += HandleSideAssignmentChanged;
     }
 
-    /// <summary>호스트가 아니거나 대기실 상태가 아닐 때는 드롭다운을 잠근다.</summary>
-    public void SetInteractable(bool interactable)
+    private void UnbindSession()
     {
-        if (roleDropdown) roleDropdown.interactable = interactable;
+        if (session == null) return;
+
+        session.FirstSideClientId.OnValueChanged -= HandleSideAssignmentChanged;
+        session.SecondSideClientId.OnValueChanged -= HandleSideAssignmentChanged;
+        session = null;
     }
 
-    private void HandleDropdownChanged(int index)
-    {
-        if (suppressCallback) return;
-        OnRoleChangeRequested?.Invoke(clientId, IndexToRole(index));
-    }
+    private void HandleSideAssignmentChanged(ulong previous, ulong current) => RefreshRole();
 
-    private void SetDropdownValueWithoutNotify(int index)
+    private void RefreshRole()
     {
-        if (roleDropdown == null) return;
+        if (roleText == null) return;
 
-        suppressCallback = true;
-        roleDropdown.value = index;
-        roleDropdown.RefreshShownValue();
-        suppressCallback = false;
-    }
+        if (session == null)
+        {
+            roleText.text = string.Empty;
+            return;
+        }
 
-    private static int RoleToIndex(DraftSide? role) => role switch
-    {
-        null => 0,
-        DraftSide.First => 1,
-        DraftSide.Second => 2,
-        _ => 0
-    };
+        string label;
+        if (ClientId == session.FirstSideClientId.Value) label = "선공";
+        else if (ClientId == session.SecondSideClientId.Value) label = "후공";
+        else label = "관전자";
 
-    private static DraftSide? IndexToRole(int index) => index switch
-    {
-        1 => DraftSide.First,
-        2 => DraftSide.Second,
-        _ => null
-    };
-
-    private void OnDestroy()
-    {
-        if (roleDropdown != null) roleDropdown.onValueChanged.RemoveListener(HandleDropdownChanged);
+        roleText.text = label;
     }
 }

@@ -5,8 +5,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 대기실 화면: 라운드 목록 편집(호스트 전용) + 진영 배정(호스트 전용) + 드래프트 시작.
-/// DraftSessionServer의 Format/State/FirstSideClientId/SecondSideClientId를 그대로 구독해서 그린다.
+/// 대기실 화면: 라운드 목록 편집(호스트 전용) + 진영 배정(호스트 전용) + 드래프트 시작 + 참가자 목록 표시.
+/// DraftSessionServer의 Format/State/FirstSideClientId/SecondSideClientId/Nicknames를 그대로 구독해서 그린다.
 ///
 /// 진영 배정은 테스트 편의를 위해 "자동 배정"(랜덤으로 변경 선공/후공) 버튼 하나로 단순화했다.
 /// 실제 매치메이킹/초대 시스템이 붙으면 이 부분만 교체하면 됨.
@@ -15,6 +15,11 @@ using UnityEngine.UI;
 /// DraftFormatData를 새로 만들고 HostSetFormat으로 통째로 반영한다. HostSetFormat은
 /// RPC가 아니라 서버(호스트)에서 로컬로 직접 호출하는 일반 메서드이므로 - 이 컨트롤러 자체가
 /// 호스트에서만 편집 가능 상태(SetInteractable)이기 때문에 게스트가 잘못 호출할 일은 없다.
+///
+/// 참가자 목록: DraftSessionServer.Nicknames(NetworkList)가 바뀔 때마다(접속/해제) 전체를
+/// 다시 그린다. 개별 참가자의 역할(관전자/선공/후공) 표시는 LobbyParticipantRowView가
+/// FirstSideClientId/SecondSideClientId를 직접 구독해서 스스로 갱신하므로, 진영 배정이
+/// 바뀔 때마다 이 목록 전체를 다시 그릴 필요는 없다.
 /// </summary>
 public class DraftLobbyController : MonoBehaviour
 {
@@ -24,6 +29,11 @@ public class DraftLobbyController : MonoBehaviour
     [SerializeField] private Button addRoundButton;
     [SerializeField] private Button flipLastRoundButton; // 마지막 라운드를 복제 + 이니셔티브 반전해서 추가
     [SerializeField] private Button applyLolPresetButton; // 전반 ABABAB/ABBAAB, 후반 BABA/BAABBA 한 번에 적용 (테스트용)
+
+    [Header("참가자 목록")]
+    [Tooltip("비워두면 참가자 목록을 그리지 않는다(다른 UI 요소들과 동일하게 미할당 시 스킵).")]
+    [SerializeField] private Transform participantListContainer;
+    [SerializeField] private LobbyParticipantRowView participantRowPrefab;
 
     [Header("Session Controls (호스트 전용)")]
     [SerializeField] private Button autoAssignSidesButton;
@@ -40,11 +50,6 @@ public class DraftLobbyController : MonoBehaviour
     [Header("Room Code")]
     [SerializeField] private TMP_Text roomCodeText;
     [SerializeField] private Button copyRoomCodeButton; // 있으면 클립보드 복사
-
-    [Header("Participants (호스트 전용 역할 변경)")]
-    [Tooltip("참가자 행들이 세로로 쌓일 부모. VerticalLayoutGroup을 붙여서 사용.")]
-    [SerializeField] private Transform participantListContainer;
-    [SerializeField] private LobbyParticipantRowView participantRowPrefab;
 
     private DraftSessionServer session;
     private readonly List<DraftRoundRowView> rows = new();
@@ -90,12 +95,7 @@ public class DraftLobbyController : MonoBehaviour
         session.PreDraftLoadBufferSeconds.OnValueChanged += HandleTimerSettingChanged;
         session.TurnTimeLimitSeconds.OnValueChanged += HandleTimerSettingChanged;
         session.PostDraftDisplaySeconds.OnValueChanged += HandleTimerSettingChanged;
-
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback += HandleClientConnectionChanged;
-            NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientConnectionChanged;
-        }
+        session.Nicknames.OnListChanged += HandleNicknamesChanged;
 
         RebuildRows();
         RebuildParticipantRows();
@@ -117,12 +117,7 @@ public class DraftLobbyController : MonoBehaviour
         session.PreDraftLoadBufferSeconds.OnValueChanged -= HandleTimerSettingChanged;
         session.TurnTimeLimitSeconds.OnValueChanged -= HandleTimerSettingChanged;
         session.PostDraftDisplaySeconds.OnValueChanged -= HandleTimerSettingChanged;
-
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientConnectedCallback -= HandleClientConnectionChanged;
-            NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientConnectionChanged;
-        }
+        session.Nicknames.OnListChanged -= HandleNicknamesChanged;
 
         ClearRows();
         ClearParticipantRows();
@@ -241,6 +236,32 @@ public class DraftLobbyController : MonoBehaviour
 
     private void ApplyRowsToServer() => session.HostSetFormat(CollectCurrentRows());
 
+    // ==================== 참가자 목록 ====================
+
+    private void HandleNicknamesChanged(NetworkListEvent<ClientNicknameEntry> _) => RebuildParticipantRows();
+
+    private void RebuildParticipantRows()
+    {
+        ClearParticipantRows();
+        if (participantListContainer == null || participantRowPrefab == null) return; // 인스펙터 미할당 시 스킵
+
+        foreach (var entry in session.Nicknames)
+        {
+            var row = Instantiate(participantRowPrefab, participantListContainer);
+            row.Bind(entry.ClientId, entry.Nickname.ToString());
+            participantRows.Add(row);
+        }
+    }
+
+    private void ClearParticipantRows()
+    {
+        foreach (var row in participantRows)
+        {
+            if (row) Destroy(row.gameObject);
+        }
+        participantRows.Clear();
+    }
+
     // ==================== 타이머 (세션 공통값) ====================
 
     /// <summary>어느 행에서 타이머 값을 고쳤든, 그 행의 현재 입력값을 세션 공통값으로 반영한다.</summary>
@@ -311,61 +332,6 @@ public class DraftLobbyController : MonoBehaviour
 
     private void HandleStartDraft() => session.HostStartDraft();
 
-    // ==================== 참가자 목록 (VerticalGroup) + 역할 드롭다운 ====================
-
-    /// <summary>클라이언트 접속/해제 콜백은 시그니처가 Action&lt;ulong&gt;이라 그대로 재사용.</summary>
-    private void HandleClientConnectionChanged(ulong _) => RebuildParticipantRows();
-
-    private void RebuildParticipantRows()
-    {
-        ClearParticipantRows();
-
-        if (session == null || NetworkManager.Singleton == null) return;
-        if (participantListContainer == null || participantRowPrefab == null) return; // 인스펙터 미할당이면 조용히 스킵
-
-        bool editable = IsHostInLobby();
-        ulong hostId = NetworkManager.ServerClientId;
-
-        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
-        {
-            var row = Instantiate(participantRowPrefab, participantListContainer);
-
-            string displayName = id == hostId ? $"호스트 (클라{id})" : $"클라{id}";
-            DraftSide? role = ResolveParticipantRole(id);
-            row.Bind(id, displayName, role);
-
-            // HostCanPlay가 꺼져 있으면 호스트 자신은 참가자로 못 올라가므로(서버에서도 거부됨),
-            // 굳이 시도해보고 실패하게 두지 않고 UI에서부터 드롭다운을 잠근다.
-            bool rowEditable = editable && (id != hostId || session.HostCanPlay.Value);
-            row.SetInteractable(rowEditable);
-
-            if (rowEditable) row.OnRoleChangeRequested += HandleParticipantRoleChangeRequested;
-
-            participantRows.Add(row);
-        }
-    }
-
-    private DraftSide? ResolveParticipantRole(ulong clientId)
-    {
-        if (session.FirstSideClientId.Value == clientId) return DraftSide.First;
-        if (session.SecondSideClientId.Value == clientId) return DraftSide.Second;
-        return null;
-    }
-
-    private void ClearParticipantRows()
-    {
-        foreach (var row in participantRows)
-        {
-            if (!row) continue;
-            row.OnRoleChangeRequested -= HandleParticipantRoleChangeRequested;
-            Destroy(row.gameObject);
-        }
-        participantRows.Clear();
-    }
-
-    private void HandleParticipantRoleChangeRequested(ulong clientId, DraftSide? role) =>
-        session.HostSetParticipantRole(clientId, role);
-
     private void HandleHostCanPlayToggled(bool isOn)
     {
         if (!IsHostInLobby())
@@ -380,7 +346,6 @@ public class DraftLobbyController : MonoBehaviour
     private void HandleHostCanPlayChanged(bool previous, bool current)
     {
         RefreshHostCanPlayToggle();
-        RebuildParticipantRows(); // 호스트 자신의 행이 편집 가능한지 여부가 이 값에 달려있으므로 다시 그림
         RefreshStatus();
     }
 
@@ -398,16 +363,11 @@ public class DraftLobbyController : MonoBehaviour
     private void HandleStateChanged(DraftSessionState previous, DraftSessionState current)
     {
         RebuildRows(); // 상태가 바뀌면 편집 가능 여부(SetInteractable)도 같이 바뀌어야 하므로 재구성
-        RebuildParticipantRows();
         RefreshInteractable();
         RefreshStatus();
     }
 
-    private void HandleSideAssignmentChanged(ulong previous, ulong current)
-    {
-        RebuildParticipantRows(); // 각 행의 역할 드롭다운 표시값을 최신 배정 상태로 다시 맞춤
-        RefreshStatus();
-    }
+    private void HandleSideAssignmentChanged(ulong previous, ulong current) => RefreshStatus();
 
     private bool IsHostInLobby() =>
         NetworkManager.Singleton != null &&
@@ -455,7 +415,7 @@ public class DraftLobbyController : MonoBehaviour
 
         SetStatus($"[{state}] {hostRole} / {sides}");
     }
-    
+
     private void RefreshRoomCode()
     {
         if (roomCodeText == null) return;
@@ -477,7 +437,7 @@ public class DraftLobbyController : MonoBehaviour
         if (relay != null && !string.IsNullOrEmpty(relay.CurrentJoinCode))
             GUIUtility.systemCopyBuffer = relay.CurrentJoinCode;
     }
-    
+
     private void SetStatus(string message)
     {
         if (statusText) statusText.text = message;
