@@ -3651,7 +3651,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d962ded16c6e9d6429bf22e8a85ff88a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  slotPrefab: {fileID: -7596144562069311007, guid: 6aa688744bd603947ad19ed595d3e9af, type: 3}
+  slotPrefab: {fileID: -7596144562069311007, guid: a532897abafef464f9375e24ce131fd7, type: 3}
   contentRoot: {fileID: 830950995}
   config:
     slotCount: 5
@@ -3844,7 +3844,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
-  m_AnchoredPosition: {x: -17.4473, y: -20}
+  m_AnchoredPosition: {x: 0, y: -20}
   m_SizeDelta: {x: 250, y: 110}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!114 &841987838
@@ -6352,7 +6352,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d962ded16c6e9d6429bf22e8a85ff88a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  slotPrefab: {fileID: -7596144562069311007, guid: 6aa688744bd603947ad19ed595d3e9af, type: 3}
+  slotPrefab: {fileID: -7596144562069311007, guid: fd5192b3db45b27479910d432b9b2095, type: 3}
   contentRoot: {fileID: 1485380513}
   config:
     slotCount: 5
@@ -7731,7 +7731,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d962ded16c6e9d6429bf22e8a85ff88a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  slotPrefab: {fileID: -7596144562069311007, guid: 6aa688744bd603947ad19ed595d3e9af, type: 3}
+  slotPrefab: {fileID: -7596144562069311007, guid: fd5192b3db45b27479910d432b9b2095, type: 3}
   contentRoot: {fileID: 1684674529}
   config:
     slotCount: 5
@@ -7784,7 +7784,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d962ded16c6e9d6429bf22e8a85ff88a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  slotPrefab: {fileID: -7596144562069311007, guid: 6aa688744bd603947ad19ed595d3e9af, type: 3}
+  slotPrefab: {fileID: -7596144562069311007, guid: a532897abafef464f9375e24ce131fd7, type: 3}
   contentRoot: {fileID: 1690041822}
   config:
     slotCount: 5

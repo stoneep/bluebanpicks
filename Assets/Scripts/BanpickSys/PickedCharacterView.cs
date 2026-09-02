@@ -1,14 +1,13 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-
-
-
-
 public sealed class PickedCharacterView : MonoBehaviour
 {
     [SerializeField] private Image portraitImage;
     [SerializeField] private CharacterCut cut = CharacterCut.Large;
+
+    [Header("Next Turn Overlay (다음 차례 표시)")]
+    [SerializeField] private GameObject nextTurnOverlay;
 
     private readonly CharacterArtProvider artProvider = new();
     private string currentId;
@@ -40,6 +39,12 @@ public sealed class PickedCharacterView : MonoBehaviour
             portraitImage.sprite = null;
             portraitImage.enabled = false;
         }
+        SetNextTurnHighlight(false);
+    }
+    
+    public void SetNextTurnHighlight(bool on)
+    {
+        if (nextTurnOverlay) nextTurnOverlay.SetActive(on);
     }
 
     private void Apply(int token, string characterId, Sprite sprite)

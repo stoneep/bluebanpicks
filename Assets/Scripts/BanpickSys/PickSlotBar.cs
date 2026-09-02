@@ -2,18 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-
-
-
-
-
-
-
-
-
-
-
-
 public sealed class PickSlotBar : MonoBehaviour
 {
     [Header("Base Settings")]
@@ -22,18 +10,12 @@ public sealed class PickSlotBar : MonoBehaviour
 
     [Header("Config")]
     [SerializeField] private PickSlotBarConfig config = new();
-
     private readonly List<PickedCharacterView> slots = new();
     private bool isInitialized;
-
     public int SlotCount => config.SlotCount;
     public IReadOnlyList<PickedCharacterView> Slots => slots;
 
     private void Awake() => SafeInitialize();
-
-    
-    
-    
     
     public void ApplyConfig(PickSlotBarConfig newConfig)
     {
@@ -91,8 +73,6 @@ public sealed class PickSlotBar : MonoBehaviour
         slots.Clear();
     }
 
-    
-
     public void SetCharacter(int index, string characterId)
     {
         SafeInitialize(); 
@@ -113,6 +93,22 @@ public sealed class PickSlotBar : MonoBehaviour
     {
         SafeInitialize();
         foreach (var s in slots) s.Clear();
+    }
+    
+    public void HighlightNextSlot(int index)
+    {
+        SafeInitialize();
+        for (int i = 0; i < slots.Count; i++)
+        {
+            slots[i].SetNextTurnHighlight(i == index);
+        }
+    }
+
+    
+    public void ClearNextSlotHighlight()
+    {
+        SafeInitialize();
+        foreach (var s in slots) s.SetNextTurnHighlight(false);
     }
 
     private bool IsValidIndex(int index) => index >= 0 && index < slots.Count;

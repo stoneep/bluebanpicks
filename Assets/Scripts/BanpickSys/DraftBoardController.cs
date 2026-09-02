@@ -1,23 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 public class DraftBoardController : MonoBehaviour
 {
@@ -34,32 +19,16 @@ public class DraftBoardController : MonoBehaviour
 
     private readonly Dictionary<(DraftSide side, DraftResultType type), int> barCursor = new();
     private readonly HashSet<string> usedCharacterIds = new(); 
-
-    
-    
-    
-    
-    
     private string lastAnnouncedPhaseName;
-
-    
     
     public event Action<DraftSide> OnTurnChanged;
     public event Action<string> OnPhaseChanged;          
     public event Action<DraftSide, string, DraftResultType> OnActionSubmitted;
     public event Action OnDraftCompleted;
-
-    
     public event Action<string> OnActionRejected;
 
     public bool IsDraftComplete => session != null && session.State.Value == DraftSessionState.Completed;
 
-    
-    
-    
-    
-    
-    
     public bool IsSessionActive
     {
         get
@@ -98,9 +67,7 @@ public class DraftBoardController : MonoBehaviour
         DraftSessionServer.OnSessionReady -= Bind;
         Unbind();
     }
-
     
-
     public void Bind(DraftSessionServer newSession)
     {
         if (newSession == null)
@@ -120,7 +87,9 @@ public class DraftBoardController : MonoBehaviour
         session.ActionLog.OnListChanged += HandleActionLogChanged;
         session.State.OnValueChanged += HandleStateChanged;
         session.OnActionRejected += HandleActionRejected;
-
+        session.CurrentSide.OnValueChanged += HandleCurrentSideChanged;
+        session.CurrentPhaseName.OnValueChanged += HandleCurrentPhaseNameChanged;
+        
         if (session.Format.Count > 0) RebuildBars();
         ReplayExistingActions();
     }
@@ -133,17 +102,12 @@ public class DraftBoardController : MonoBehaviour
         session.ActionLog.OnListChanged -= HandleActionLogChanged;
         session.State.OnValueChanged -= HandleStateChanged;
         session.OnActionRejected -= HandleActionRejected;
-
+        session.CurrentSide.OnValueChanged -= HandleCurrentSideChanged;
+        session.CurrentPhaseName.OnValueChanged -= HandleCurrentPhaseNameChanged;
+        
         session = null;
         lastAnnouncedPhaseName = null;
     }
-
-    
-
-    
-    
-    
-    
     
     public void SubmitCharacter(string characterId)
     {
@@ -164,7 +128,6 @@ public class DraftBoardController : MonoBehaviour
 
         session.SubmitActionServerRpc(characterId);
     }
-
     
     public bool IsCharacterAvailable(string characterId) => !usedCharacterIds.Contains(characterId);
 
@@ -177,9 +140,31 @@ public class DraftBoardController : MonoBehaviour
         barCursor.Clear();
         usedCharacterIds.Clear();
     }
-
     
+    private void ClearAllNextSlotHighlights()
+    {
+        firstPickBar.ClearNextSlotHighlight();
+        firstBanBar.ClearNextSlotHighlight();
+        secondBanBar.ClearNextSlotHighlight();
+        secondPickBar.ClearNextSlotHighlight();
+    }
+    
+    private void UpdateNextSlotIndicator()
+    {
+        ClearAllNextSlotHighlights();
 
+        if (session.State.Value != DraftSessionState.InProgress) return;
+        if (!Enum.TryParse(session.CurrentPhaseName.Value.ToString(), out DraftResultType type)) return;
+
+        var side = session.CurrentSide.Value;
+        var bar = ResolveBar(side, type);
+        if (!bar) return;
+
+        var key = (side, type);
+        int nextIndex = barCursor.TryGetValue(key, out var cursor) ? cursor : 0;
+        bar.HighlightNextSlot(nextIndex);
+    }
+    
     private void HandleFormatChanged(NetworkListEvent<NetworkDraftRoundConfig> _) => RebuildBars();
 
     private void RebuildBars()
@@ -191,7 +176,6 @@ public class DraftBoardController : MonoBehaviour
         secondBanBar.ApplyConfig(PickSlotBarConfig.Of(SumSlots(format, DraftSide.Second, DraftResultType.Ban)));
         secondPickBar.ApplyConfig(PickSlotBarConfig.Of(SumSlots(format, DraftSide.Second, DraftResultType.Pick)));
     }
-
     
     private void ReplayExistingActions()
     {
@@ -207,12 +191,22 @@ public class DraftBoardController : MonoBehaviour
 
     private void HandleActionLogChanged(NetworkListEvent<NetworkDraftAction> change)
     {
-        
-        
         if (change.Type != NetworkListEvent<NetworkDraftAction>.EventType.Add) return;
 
         var action = change.Value;
         ApplyAction(action.side, action.characterId.ToString(), action.resultType, notify: true);
+    }
+    
+    private void HandleCurrentPhaseNameChanged(FixedString32Bytes previous, FixedString32Bytes current)
+    {
+        if (session == null || session.State.Value != DraftSessionState.InProgress) return;
+        UpdateNextSlotIndicator();
+    }
+    
+    private void HandleCurrentSideChanged(DraftSide previous, DraftSide current)
+    {
+        if (session == null || session.State.Value != DraftSessionState.InProgress) return;
+        UpdateNextSlotIndicator();
     }
 
     private void ApplyAction(DraftSide side, string characterId, DraftResultType type, bool notify)
@@ -235,11 +229,6 @@ public class DraftBoardController : MonoBehaviour
         OnActionSubmitted?.Invoke(side, characterId, type);
         AnnounceCurrentTurnIfInProgress();
     }
-
-    
-    
-    
-    
     
     private void AnnounceCurrentTurnIfInProgress()
     {
@@ -252,6 +241,7 @@ public class DraftBoardController : MonoBehaviour
             OnPhaseChanged?.Invoke(phaseName);
         }
 
+        UpdateNextSlotIndicator();
         OnTurnChanged?.Invoke(session.CurrentSide.Value);
     }
 
@@ -272,6 +262,7 @@ public class DraftBoardController : MonoBehaviour
         }
         else if (current == DraftSessionState.Completed)
         {
+            ClearAllNextSlotHighlights();
             OnDraftCompleted?.Invoke();
         }
     }
