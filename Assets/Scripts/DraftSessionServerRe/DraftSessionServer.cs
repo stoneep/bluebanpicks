@@ -55,15 +55,6 @@ public partial class DraftSessionServer : NetworkBehaviour
     /// <summary>clientId별 닉네임. 접속 시 등록되고 접속 해제 시 제거된다. 전원 구독 가능.</summary>
     public readonly NetworkList<ClientNicknameEntry> Nicknames = new();
 
-    /// <summary>
-    /// true면 호스트(ServerClientId)도 선공/후공에 배정될 수 있다 ("2인 연습 모드").
-    /// 기본값 false = 기존 규칙 그대로 "호스트는 항상 관전자".
-    /// 관전자 역할의 3번째 인원 없이, 실제로 대결할 두 사람 중 한 명이 방을 만들고
-    /// 자기 자신도 선공/후공 중 하나로 배정해 바로 시작하고 싶을 때 이 값을 켠다.
-    /// Lobby 상태에서만 변경 가능(HostSetHostCanPlay).
-    /// </summary>
-    public readonly NetworkVariable<bool> HostCanPlay = new(false);
-
     public readonly NetworkVariable<DraftSessionState> State = new(DraftSessionState.Lobby);
 
     [Header("Scene Transition")]

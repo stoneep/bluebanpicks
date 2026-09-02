@@ -48,11 +48,6 @@ public class DraftLobbyController : MonoBehaviour
     [SerializeField] private Button autoAssignSidesButton;
     [SerializeField] private Button startDraftButton;
 
-    [Header("2인 연습 모드 (호스트 전용)")]
-    [Tooltip("켜면 호스트 자신도 자동 배정 후보에 포함되어 선공/후공 중 하나로 뽑힐 수 있다. " +
-             "관전자 역할의 3번째 인원 없이 2명이서 바로 연습할 때 사용.")]
-    [SerializeField] private Toggle hostCanPlayToggle;
-
     [Header("Status")]
     [SerializeField] private TMP_Text statusText;
 
@@ -72,7 +67,6 @@ public class DraftLobbyController : MonoBehaviour
         autoAssignSidesButton.onClick.AddListener(HandleAutoAssignSides);
         startDraftButton.onClick.AddListener(HandleStartDraft);
         copyRoomCodeButton.onClick.AddListener(HandleCopyRoomCode);
-        if (hostCanPlayToggle != null) hostCanPlayToggle.onValueChanged.AddListener(HandleHostCanPlayToggled);
 
         if (preDraftLoadBufferField != null) preDraftLoadBufferField.onEndEdit.AddListener(_ => HandleTimerFieldEdited());
         if (turnTimeLimitField != null) turnTimeLimitField.onEndEdit.AddListener(_ => HandleTimerFieldEdited());
@@ -104,7 +98,6 @@ public class DraftLobbyController : MonoBehaviour
         session.State.OnValueChanged += HandleStateChanged;
         session.FirstSideClientId.OnValueChanged += HandleSideAssignmentChanged;
         session.SecondSideClientId.OnValueChanged += HandleSideAssignmentChanged;
-        session.HostCanPlay.OnValueChanged += HandleHostCanPlayChanged;
         session.PreDraftLoadBufferSeconds.OnValueChanged += HandleTimerSettingChanged;
         session.TurnTimeLimitSeconds.OnValueChanged += HandleTimerSettingChanged;
         session.PostDraftDisplaySeconds.OnValueChanged += HandleTimerSettingChanged;
@@ -115,7 +108,6 @@ public class DraftLobbyController : MonoBehaviour
         RefreshInteractable();
         RefreshStatus();
         RefreshRoomCode();
-        RefreshHostCanPlayToggle();
         RefreshTimerFields();
     }
 
@@ -127,7 +119,6 @@ public class DraftLobbyController : MonoBehaviour
         session.State.OnValueChanged -= HandleStateChanged;
         session.FirstSideClientId.OnValueChanged -= HandleSideAssignmentChanged;
         session.SecondSideClientId.OnValueChanged -= HandleSideAssignmentChanged;
-        session.HostCanPlay.OnValueChanged -= HandleHostCanPlayChanged;
         session.PreDraftLoadBufferSeconds.OnValueChanged -= HandleTimerSettingChanged;
         session.TurnTimeLimitSeconds.OnValueChanged -= HandleTimerSettingChanged;
         session.PostDraftDisplaySeconds.OnValueChanged -= HandleTimerSettingChanged;
@@ -267,7 +258,11 @@ public class DraftLobbyController : MonoBehaviour
 
     // ==================== 참가자 목록 ====================
 
-    private void HandleNicknamesChanged(NetworkListEvent<ClientNicknameEntry> _) => RebuildParticipantRows();
+    private void HandleNicknamesChanged(NetworkListEvent<ClientNicknameEntry> _)
+    {
+        RebuildParticipantRows();
+        RefreshInteractable(); // 참가자 수 변화가 자동배정 버튼 활성화에도 즉시 반영되도록
+    }
 
     private void RebuildParticipantRows()
     {
@@ -331,35 +326,21 @@ public class DraftLobbyController : MonoBehaviour
     // ==================== 진영 배정 / 시작 ====================
 
     /// <summary>
-    /// 역할 규칙: 기본적으로 호스트는 관전자이고, 드래프트에 실제로 참가하는(선공/후공)
-    /// 클라이언트는 호스트를 제외한 나머지 접속자들 중에서만 뽑는다.
-    /// 단, "2인 연습 모드"(HostCanPlay)가 켜져 있으면 호스트도 후보에 포함시킨다 -
-    /// 관전자 역할의 3번째 인원 없이, 대결할 두 사람 중 한 명이 방을 만들고
-    /// 자기 자신을 선공/후공 중 하나로 배정해 바로 시작할 수 있게 하기 위함.
-    /// (서버 쪽 DraftSessionServer.HostAssignSides에도 같은 규칙이 최종 방어선으로 들어가 있음)
+    /// 역할 규칙: 호스트를 포함한 모든 접속자가 선공/후공 후보다(호스트 전용 제약 없음).
+    /// 접속자가 3명 이상이면 그중 무작위로 두 명을 뽑는다.
     /// </summary>
     private void HandleAutoAssignSides()
     {
-        bool hostCanPlay = session.HostCanPlay.Value;
-
-        var players = new List<ulong>();
-        foreach (var id in NetworkManager.Singleton.ConnectedClientsIds)
-        {
-            if (id == NetworkManager.ServerClientId && !hostCanPlay) continue;
-            players.Add(id);
-        }
+        var players = new List<ulong>(NetworkManager.Singleton.ConnectedClientsIds);
 
         if (players.Count < 2)
         {
-            string hint = hostCanPlay
-                ? $"(현재 접속자 {players.Count}명, 2인 연습 모드 켜짐)"
-                : $"(현재 참가자 {players.Count}명, 호스트는 관전자)";
-            SetStatus($"진영을 배정하려면 참가 가능한 인원이 2명 이상이어야 합니다. {hint}");
+            SetStatus($"진영을 배정하려면 참가자가 2명 이상이어야 합니다. (현재 접속자 {players.Count}명)");
             return;
         }
 
-        // 접속자가 3명 이상인데 2인 연습 모드가 켜져 있는 경우, 호스트를 포함해 무작위로
-        // 두 명을 뽑는다(랜덤 셔플 후 앞 2명 사용). 접속자가 정확히 2명이면 항상 그 둘이다.
+        // 접속자가 3명 이상이면 무작위로 두 명을 뽑는다(랜덤 셔플 후 앞 2명 사용).
+        // 접속자가 정확히 2명이면 항상 그 둘이다.
         for (int i = players.Count - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
@@ -370,32 +351,6 @@ public class DraftLobbyController : MonoBehaviour
     }
 
     private void HandleStartDraft() => session.HostStartDraft();
-
-    private void HandleHostCanPlayToggled(bool isOn)
-    {
-        if (!IsHostInLobby())
-        {
-            RefreshHostCanPlayToggle(); // 게스트가 실수로 못 건드리게 즉시 원복 표시
-            return;
-        }
-
-        session.HostSetHostCanPlay(isOn);
-    }
-
-    private void HandleHostCanPlayChanged(bool previous, bool current)
-    {
-        RefreshHostCanPlayToggle();
-        RefreshStatus();
-    }
-
-    private void RefreshHostCanPlayToggle()
-    {
-        if (hostCanPlayToggle == null) return;
-
-        bool value = session != null && session.HostCanPlay.Value;
-        hostCanPlayToggle.SetIsOnWithoutNotify(value);
-        hostCanPlayToggle.interactable = IsHostInLobby();
-    }
 
     // ==================== 상태 표시 ====================
 
@@ -417,14 +372,14 @@ public class DraftLobbyController : MonoBehaviour
     private void RefreshInteractable()
     {
         bool editable = IsHostInLobby();
-
-        addRoundButton.interactable = editable && rows.Count == 0; // 추가 라운드 기능 삭제: 라운드가 이미 있으면 비활성화
+        bool enoughPlayers = NetworkManager.Singleton != null
+                             && NetworkManager.Singleton.ConnectedClientsIds.Count >= 2;
+        
+        addRoundButton.interactable = editable && rows.Count == 0;
         flipLastRoundButton.interactable = editable;
         applyLolPresetButton.interactable = editable;
-        autoAssignSidesButton.interactable = editable;
+        autoAssignSidesButton.interactable = editable && enoughPlayers; // 2명 미만이면 아예 비활성화
         startDraftButton.interactable = editable;
-
-        if (hostCanPlayToggle != null) hostCanPlayToggle.interactable = editable;
 
         if (preDraftLoadBufferField != null) preDraftLoadBufferField.interactable = editable;
         if (turnTimeLimitField != null) turnTimeLimitField.interactable = editable;
@@ -451,10 +406,8 @@ public class DraftLobbyController : MonoBehaviour
         ulong hostId = NetworkManager.ServerClientId;
         bool hostIsPlaying = hostId == session.FirstSideClientId.Value || hostId == session.SecondSideClientId.Value;
         string hostRole = hostIsPlaying
-            ? $"호스트(클라{hostId})=참가자 (2인 연습 모드)"
-            : session.HostCanPlay.Value
-                ? $"호스트(클라{hostId})=관전 (2인 연습 모드 켜짐, 아직 미배정)"
-                : $"호스트(클라{hostId})=관전";
+            ? $"호스트(클라{hostId})=참가자"
+            : $"호스트(클라{hostId})=관전";
 
         SetStatus($"[{state}] {hostRole} / {sides}");
     }
