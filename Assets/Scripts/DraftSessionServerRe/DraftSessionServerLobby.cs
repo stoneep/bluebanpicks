@@ -106,4 +106,47 @@ public partial class DraftSessionServer
         TurnTimeLimitSeconds.Value = Mathf.Max(0f, turnTimeLimitSecondsValue);
         PostDraftDisplaySeconds.Value = Mathf.Max(0f, postDraftDisplaySecondsValue);
     }
+    
+    /// <summary>
+    /// 호스트 전용: 참가자를 "선수 후보"로 지정하거나 해제한다. 최대 2명까지만 지정 가능하며,
+    /// 이미 2명이 지정된 상태에서 새 clientId를 추가하려 하면 무시된다(먼저 기존 후보를 해제해야 함).
+    /// 실제 선공/후공 배정은 DraftLobbyController.HandleAutoAssignSides가 이 목록을 보고 무작위로 정한다.
+    /// </summary>
+    public void HostSetPlayerCandidate(ulong clientId, bool isCandidate)
+    {
+        if (!IsServer)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostSetPlayerCandidate는 서버(호스트)에서만 호출할 수 있습니다.");
+            return;
+        }
+        if (State.Value != DraftSessionState.Lobby)
+        {
+            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 선수 후보를 바꿀 수 없습니다.");
+            return;
+        }
+
+        int index = IndexOfPlayerCandidate(clientId);
+
+        if (isCandidate)
+        {
+            if (index >= 0) return; // 이미 후보
+            if (PlayerCandidateClientIds.Count >= 2)
+            {
+                Debug.LogWarning($"[{nameof(DraftSessionServer)}] 선수 후보는 최대 2명까지만 지정할 수 있습니다.");
+                return;
+            }
+            PlayerCandidateClientIds.Add(clientId);
+        }
+        else if (index >= 0)
+        {
+            PlayerCandidateClientIds.RemoveAt(index);
+        }
+    }
+
+    private int IndexOfPlayerCandidate(ulong clientId)
+    {
+        for (int i = 0; i < PlayerCandidateClientIds.Count; i++)
+            if (PlayerCandidateClientIds[i] == clientId) return i;
+        return -1;
+    }
 }

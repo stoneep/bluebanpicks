@@ -50,7 +50,14 @@ public partial class DraftSessionServer : NetworkBehaviour
     /// <summary>선공/후공에 배정된 클라이언트 ID. ulong.MaxValue면 미배정.</summary>
     public readonly NetworkVariable<ulong> FirstSideClientId = new(ulong.MaxValue);
     public readonly NetworkVariable<ulong> SecondSideClientId = new(ulong.MaxValue);
-
+    
+    /// <summary>
+    /// 호스트가 참가자 목록에서 "선수"로 지정한 clientId 목록. 최대 2명까지만 들어간다.
+    /// 여기 없는 접속자는 전부 갤러리(관전자)이며, 자동 배정(DraftLobbyController.HandleAutoAssignSides)의
+    /// 후보군은 이 목록으로 제한된다. 접속 해제 시 자동으로 제거된다.
+    /// </summary>
+    public readonly NetworkList<ulong> PlayerCandidateClientIds = new();
+    
     // ---------- 대기실: 참가자 닉네임 ----------
     /// <summary>clientId별 닉네임. 접속 시 등록되고 접속 해제 시 제거된다. 전원 구독 가능.</summary>
     public readonly NetworkList<ClientNicknameEntry> Nicknames = new();

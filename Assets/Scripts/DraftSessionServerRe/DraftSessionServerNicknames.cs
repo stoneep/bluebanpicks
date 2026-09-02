@@ -44,6 +44,7 @@ public partial class DraftSessionServer
     {
         if (!IsServer) return;
         RemoveNicknameEntry(clientId);
+        RemovePlayerCandidate(clientId); // 나가면 선수 후보 지정도 자동 해제
     }
 
     private void RemoveNicknameEntry(ulong clientId)
@@ -58,6 +59,18 @@ public partial class DraftSessionServer
         }
     }
 
+    private void RemovePlayerCandidate(ulong clientId)
+    {
+        for (int i = PlayerCandidateClientIds.Count - 1; i >= 0; i--)
+        {
+            if (PlayerCandidateClientIds[i] == clientId)
+            {
+                PlayerCandidateClientIds.RemoveAt(i);
+                return;
+            }
+        }
+    }
+    
     /// <summary>주어진 clientId의 현재 닉네임. 아직 등록 전이면 "PlayerN"으로 대체.</summary>
     public string GetNickname(ulong clientId)
     {

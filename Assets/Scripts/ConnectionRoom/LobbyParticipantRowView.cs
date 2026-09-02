@@ -1,6 +1,7 @@
 using TMPro;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class LobbyParticipantRowView : MonoBehaviour
 {
@@ -17,6 +18,11 @@ public class LobbyParticipantRowView : MonoBehaviour
     [Tooltip("선택 사항. 이 행이 '나 자신'일 때만 활성화할 오브젝트(예: \"(나)\" 라벨). 비워두면 사용 안 함.")]
     [SerializeField] private GameObject localIndicator;
 
+    [Tooltip("선택 사항. 호스트가 이 참가자를 '선수 후보'로 지정/해제하는 토글. " +
+             "전체 참가자 중 최대 2명까지만 켤 수 있다 - 이미 2명이 찬 상태에서 후보가 아닌 참가자는 " +
+             "interactable=false로 잠긴다. 비워두면 사용 안 함.")]
+    [SerializeField] private Toggle playerCandidateToggle;
+    
     public ulong ClientId { get; private set; }
 
     private DraftSessionServer session;
@@ -26,6 +32,8 @@ public class LobbyParticipantRowView : MonoBehaviour
         // Bind()가 입/퇴장마다 매번 호출돼도 리스너가 중복 등록되지 않도록 여기서 한 번만 연결
         if (roleDropdown != null)
             roleDropdown.onValueChanged.AddListener(HandleRoleDropdownChanged);
+        if (playerCandidateToggle != null)
+            playerCandidateToggle.onValueChanged.AddListener(HandlePlayerCandidateToggleChanged);
     }
 
     public void Bind(ulong clientId, string nickname)
@@ -52,7 +60,8 @@ public class LobbyParticipantRowView : MonoBehaviour
 
         session.FirstSideClientId.OnValueChanged += HandleSideAssignmentChanged;
         session.SecondSideClientId.OnValueChanged += HandleSideAssignmentChanged;
-        session.State.OnValueChanged += HandleStateChanged; // Lobby 종료 시 드롭다운 잠그기 위해 추가
+        session.State.OnValueChanged += HandleStateChanged;
+        session.PlayerCandidateClientIds.OnListChanged += HandlePlayerCandidatesChanged;
     }
 
     private void UnbindSession()
@@ -61,15 +70,17 @@ public class LobbyParticipantRowView : MonoBehaviour
         session.FirstSideClientId.OnValueChanged -= HandleSideAssignmentChanged;
         session.SecondSideClientId.OnValueChanged -= HandleSideAssignmentChanged;
         session.State.OnValueChanged -= HandleStateChanged;
+        session.PlayerCandidateClientIds.OnListChanged -= HandlePlayerCandidatesChanged;
         session = null;
     }
 
     private void HandleSideAssignmentChanged(ulong previous, ulong current) => RefreshRole();
     private void HandleStateChanged(DraftSessionState previous, DraftSessionState current) => RefreshRole();
+    private void HandlePlayerCandidatesChanged(NetworkListEvent<ulong> _) => RefreshRole();
 
     private void RefreshRole()
     {
-        DraftSide? role = null; // null = 관전자
+        DraftSide? role = null;
         if (session != null)
         {
             if (ClientId == session.FirstSideClientId.Value) role = DraftSide.First;
@@ -81,12 +92,39 @@ public class LobbyParticipantRowView : MonoBehaviour
 
         if (roleDropdown != null)
         {
-            // SetValueWithoutNotify로 onValueChanged 재발화(=서버로 되쏘는 무한 루프) 방지
             roleDropdown.SetValueWithoutNotify(RoleToDropdownIndex(role));
             roleDropdown.interactable = IsHostEditable();
         }
+
+        if (playerCandidateToggle != null)
+        {
+            bool isCandidate = false;
+            int candidateCount = 0;
+            if (session != null)
+            {
+                foreach (var id in session.PlayerCandidateClientIds)
+                {
+                    candidateCount++;
+                    if (id == ClientId) isCandidate = true;
+                }
+            }
+
+            playerCandidateToggle.SetIsOnWithoutNotify(isCandidate);
+            // 이미 2명이 찼고 나는 그 후보가 아니면 더 못 누르게 잠근다 (서버 왕복 없이 즉시 UX로 방지)
+            playerCandidateToggle.interactable = IsHostEditable() && (isCandidate || candidateCount < 2);
+        }
     }
 
+    private void HandlePlayerCandidateToggleChanged(bool isOn)
+    {
+        if (session == null || !IsHostEditable())
+        {
+            RefreshRole();
+            return;
+        }
+        session.HostSetPlayerCandidate(ClientId, isOn);
+    }
+    
     private void HandleRoleDropdownChanged(int index)
     {
         if (session == null || !IsHostEditable())

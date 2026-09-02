@@ -102,7 +102,8 @@ public class DraftLobbyController : MonoBehaviour
         session.TurnTimeLimitSeconds.OnValueChanged += HandleTimerSettingChanged;
         session.PostDraftDisplaySeconds.OnValueChanged += HandleTimerSettingChanged;
         session.Nicknames.OnListChanged += HandleNicknamesChanged;
-
+        session.PlayerCandidateClientIds.OnListChanged += HandlePlayerCandidatesChanged; // Bind()
+        
         RebuildRows();
         RebuildParticipantRows();
         RefreshInteractable();
@@ -123,7 +124,8 @@ public class DraftLobbyController : MonoBehaviour
         session.TurnTimeLimitSeconds.OnValueChanged -= HandleTimerSettingChanged;
         session.PostDraftDisplaySeconds.OnValueChanged -= HandleTimerSettingChanged;
         session.Nicknames.OnListChanged -= HandleNicknamesChanged;
-
+        session.PlayerCandidateClientIds.OnListChanged -= HandlePlayerCandidatesChanged; // Unbind()
+        
         ClearRows();
         ClearParticipantRows();
         session = null;
@@ -132,7 +134,8 @@ public class DraftLobbyController : MonoBehaviour
     // ==================== 라운드 목록 ====================
 
     private void HandleFormatChanged(NetworkListEvent<NetworkDraftRoundConfig> _) => RebuildRows();
-
+    private void HandlePlayerCandidatesChanged(NetworkListEvent<ulong> _) => RefreshInteractable();
+    
     private void RebuildRows()
     {
         ClearRows();
@@ -326,28 +329,25 @@ public class DraftLobbyController : MonoBehaviour
     // ==================== 진영 배정 / 시작 ====================
 
     /// <summary>
-    /// 역할 규칙: 호스트를 포함한 모든 접속자가 선공/후공 후보다(호스트 전용 제약 없음).
-    /// 접속자가 3명 이상이면 그중 무작위로 두 명을 뽑는다.
+    /// 역할 규칙: 참가자 목록에서 호스트가 "선수"로 지정한 2명만 배정 후보다.
+    /// 그 2명 중 누가 선공/후공이 될지만 무작위로 정하고(동전 던지기), 선수로 지정하지 않은
+    /// 나머지 접속자(1~5명)는 손대지 않으므로 전부 갤러리(관전자)로 남는다.
     /// </summary>
     private void HandleAutoAssignSides()
     {
-        var players = new List<ulong>(NetworkManager.Singleton.ConnectedClientsIds);
-
-        if (players.Count < 2)
+        if (session.PlayerCandidateClientIds.Count != 2)
         {
-            SetStatus($"진영을 배정하려면 참가자가 2명 이상이어야 합니다. (현재 접속자 {players.Count}명)");
+            SetStatus($"자동 배정을 하려면 참가자 목록에서 '선수'를 정확히 2명 지정하세요. (현재 {session.PlayerCandidateClientIds.Count}명)");
             return;
         }
 
-        // 접속자가 3명 이상이면 무작위로 두 명을 뽑는다(랜덤 셔플 후 앞 2명 사용).
-        // 접속자가 정확히 2명이면 항상 그 둘이다.
-        for (int i = players.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1);
-            (players[i], players[j]) = (players[j], players[i]);
-        }
+        ulong a = session.PlayerCandidateClientIds[0];
+        ulong b = session.PlayerCandidateClientIds[1];
 
-        session.HostAssignSides(players[0], players[1]);
+        if (Random.value < 0.5f)
+            session.HostAssignSides(a, b);
+        else
+            session.HostAssignSides(b, a);
     }
 
     private void HandleStartDraft() => session.HostStartDraft();
@@ -372,13 +372,16 @@ public class DraftLobbyController : MonoBehaviour
     private void RefreshInteractable()
     {
         bool editable = IsHostInLobby();
-        bool enoughPlayers = NetworkManager.Singleton != null
-                             && NetworkManager.Singleton.ConnectedClientsIds.Count >= 2;
+        // bool enoughPlayers = NetworkManager.Singleton != null
+        //                      && NetworkManager.Singleton.ConnectedClientsIds.Count >= 2;
+        
+        bool sidesReady = session != null && session.PlayerCandidateClientIds.Count == 2;
+        autoAssignSidesButton.interactable = editable && sidesReady;
         
         addRoundButton.interactable = editable && rows.Count == 0;
         flipLastRoundButton.interactable = editable;
         applyLolPresetButton.interactable = editable;
-        autoAssignSidesButton.interactable = editable && enoughPlayers; // 2명 미만이면 아예 비활성화
+        autoAssignSidesButton.interactable = editable && sidesReady; // 2명 미만이면 아예 비활성화
         startDraftButton.interactable = editable;
 
         if (preDraftLoadBufferField != null) preDraftLoadBufferField.interactable = editable;
