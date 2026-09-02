@@ -16,23 +16,15 @@ public class DraftRoundRowView : MonoBehaviour
     [SerializeField] private TMP_InputField pickOrderPatternField;
     [SerializeField] private Button removeButton;
 
-    [Header("타이머 (라운드별 값이 아니라 세션 전체 공통값 - 어느 행에서 고쳐도 전체에 적용됨)")]
-    [Tooltip("DraftSessionServer.PreDraftLoadBufferSeconds. 밴픽씬 로드 후 실제 시작 전 대기 시간(초).")]
-    [SerializeField] private TMP_InputField preDraftLoadBufferField;
-    [Tooltip("DraftSessionServer.TurnTimeLimitSeconds. 밴/픽 각 턴의 제한 시간(초). 0 이하면 턴 타이머 없음.")]
-    [SerializeField] private TMP_InputField turnTimeLimitField;
-    [Tooltip("DraftSessionServer.PostDraftDisplaySeconds. 밴/픽 종료 후 안내 카운트다운 시간(초). " +
-             "0 이하면 카운트다운 대신 종료 시점부터의 경과 시간을 보여준다.")]
-    [SerializeField] private TMP_InputField postDraftDisplayField;
-    
+    // 타이머(preDraftLoadBufferField/turnTimeLimitField/postDraftDisplayField)는 라운드별 값이 아니라
+    // 세션 전체 공통값이라, 라운드 행마다 반복해서 두면 화면에 같은 필드가 2번, 3번씩 보이는 문제가 있었다.
+    // 그래서 이 행에서는 제거했고, DraftLobbyController에 한 번만 두고 편집하도록 옮겼다.
+
     public event Action OnEdited;
-    
-    public event Action OnTimerEdited;
     
     public event Action OnRemoveRequested;
 
     private bool suppressEvents;
-    private bool suppressTimerEvents;
 
     private void Awake()
     {
@@ -43,10 +35,6 @@ public class DraftRoundRowView : MonoBehaviour
         banOrderPatternField.onEndEdit.AddListener(_ => RaiseEdited());
         pickOrderPatternField.onEndEdit.AddListener(_ => RaiseEdited());
         removeButton.onClick.AddListener(() => OnRemoveRequested?.Invoke());
-
-        if (preDraftLoadBufferField != null) preDraftLoadBufferField.onEndEdit.AddListener(_ => RaiseTimerEdited());
-        if (turnTimeLimitField != null) turnTimeLimitField.onEndEdit.AddListener(_ => RaiseTimerEdited());
-        if (postDraftDisplayField != null) postDraftDisplayField.onEndEdit.AddListener(_ => RaiseTimerEdited());
     }
 
     public void SetInteractable(bool interactable)
@@ -58,10 +46,6 @@ public class DraftRoundRowView : MonoBehaviour
         banOrderPatternField.interactable = interactable;
         pickOrderPatternField.interactable = interactable;
         removeButton.interactable = interactable;
-
-        if (preDraftLoadBufferField != null) preDraftLoadBufferField.interactable = interactable;
-        if (turnTimeLimitField != null) turnTimeLimitField.interactable = interactable;
-        if (postDraftDisplayField != null) postDraftDisplayField.interactable = interactable;
     }
     
     public void Bind(DraftRoundConfig round)
@@ -77,23 +61,7 @@ public class DraftRoundRowView : MonoBehaviour
 
         suppressEvents = false;
     }
-    
-    public void BindTimers(float preDraftLoadBufferSeconds, float turnTimeLimitSeconds, float postDraftDisplaySeconds)
-    {
-        suppressTimerEvents = true;
 
-        if (preDraftLoadBufferField != null) preDraftLoadBufferField.text = FormatSeconds(preDraftLoadBufferSeconds);
-        if (turnTimeLimitField != null) turnTimeLimitField.text = FormatSeconds(turnTimeLimitSeconds);
-        if (postDraftDisplayField != null) postDraftDisplayField.text = FormatSeconds(postDraftDisplaySeconds);
-
-        suppressTimerEvents = false;
-    }
-    
-    public (float preDraftLoadBufferSeconds, float turnTimeLimitSeconds, float postDraftDisplaySeconds) ReadTimerValues() => (
-        ParseNonNegativeFloat(preDraftLoadBufferField != null ? preDraftLoadBufferField.text : null),
-        ParseNonNegativeFloat(turnTimeLimitField != null ? turnTimeLimitField.text : null),
-        ParseNonNegativeFloat(postDraftDisplayField != null ? postDraftDisplayField.text : null));
-    
     public DraftRoundConfig ReadValue()
     {
         var (firstBan, secondBan) = ParseSlotsPair(banSlotsField.text);
@@ -147,12 +115,6 @@ public class DraftRoundRowView : MonoBehaviour
         }
     }
 
-    private void RaiseTimerEdited()
-    {
-        if (suppressTimerEvents) return;
-        OnTimerEdited?.Invoke();
-    }
-
     private static (int first, int second) ParseSlotsPair(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return (0, 0);
@@ -170,9 +132,4 @@ public class DraftRoundRowView : MonoBehaviour
 
     private static int ParseNonNegativeInt(string text) =>
         int.TryParse(text, out var value) ? Mathf.Max(0, value) : 0;
-
-    private static float ParseNonNegativeFloat(string text) =>
-        float.TryParse(text, out var value) ? Mathf.Max(0f, value) : 0f;
-
-    private static string FormatSeconds(float seconds) => seconds.ToString("0.##");
 }
