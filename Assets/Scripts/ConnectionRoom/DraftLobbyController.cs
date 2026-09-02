@@ -166,10 +166,27 @@ public class DraftLobbyController : MonoBehaviour
         rows.Clear();
     }
 
+    /// <summary>
+    /// 라운드가 하나도 없는 상태(처음 추가)에서는 "전반"/"후반"을 한 번에 같이 만들어 준다.
+    /// (기존에는 버튼을 2번 눌러 라운드를 하나씩 추가하고 이름도 직접 "전반"/"후반"으로
+    /// 고쳐야 했음 - 이제 첫 클릭 한 번으로 전반/후반 세트가 바로 생성된다.)
+    /// 이미 라운드가 2개 이상 있는 상태에서 또 누르면(연장전 등) 기존처럼 한 개씩 추가한다.
+    /// roundNameField는 계속 수정 가능하며, 이 기본값들은 시작점일 뿐이다.
+    /// </summary>
     private void HandleAddRound()
     {
         var data = CollectCurrentRows();
-        data.AddRound(new DraftRoundConfig(3, 3, 3, 3, DraftSide.First, $"라운드 {rows.Count + 1}"));
+
+        if (rows.Count == 0)
+        {
+            data.AddRound(new DraftRoundConfig(3, 3, 3, 3, DraftSide.First, "전반"));
+            data.AddRound(new DraftRoundConfig(3, 3, 3, 3, DraftSide.Second, "후반"));
+        }
+        else
+        {
+            data.AddRound(new DraftRoundConfig(3, 3, 3, 3, DraftSide.First, $"라운드 {rows.Count + 1}"));
+        }
+
         session.HostSetFormat(data);
     }
 
