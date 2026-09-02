@@ -1536,7 +1536,7 @@ GameObject:
   - component: {fileID: 7263538925665376597}
   - component: {fileID: 8543043511988390744}
   m_Layer: 5
-  m_Name: firstBanField
+  m_Name: banSlotsField
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2390,10 +2390,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DraftRoundRowView
   roundNameField: {fileID: 2749157839043571752}
-  firstBanField: {fileID: 8543043511988390744}
-  secondBanField: {fileID: 1068233624251018448}
-  firstPickField: {fileID: 1022713797736635038}
-  secondPickField: {fileID: 604138803969731417}
+  banSlotsField: {fileID: 8543043511988390744}
+  pickSlotsField: {fileID: 1068233624251018448}
   startingSideDropdown: {fileID: 2614221682846035417}
   banOrderPatternField: {fileID: 2485555210288585024}
   pickOrderPatternField: {fileID: 4223459997797719025}
@@ -2656,7 +2654,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 1 Phase Ban
+  m_text: banSlotsField
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: b3a1e8f0bed4bf94abee5b7a66ea1add, type: 2}
   m_sharedMaterial: {fileID: -7798314419329222504, guid: b3a1e8f0bed4bf94abee5b7a66ea1add, type: 2}
@@ -3653,7 +3651,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 1 Phase Pick
+  m_text: pickSlotsField
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: b3a1e8f0bed4bf94abee5b7a66ea1add, type: 2}
   m_sharedMaterial: {fileID: -7798314419329222504, guid: b3a1e8f0bed4bf94abee5b7a66ea1add, type: 2}
@@ -5046,7 +5044,7 @@ GameObject:
   - component: {fileID: 8633760314889614628}
   - component: {fileID: 1068233624251018448}
   m_Layer: 5
-  m_Name: secondBanField
+  m_Name: pickSlotsField
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
