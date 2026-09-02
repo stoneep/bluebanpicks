@@ -1,10 +1,7 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 대기실(포맷/진영 편집) ~ 드래프트 진행 ~ 종료까지를 담당하는 호스트 권위형 세션.
@@ -19,8 +16,17 @@ using UnityEngine.SceneManagement;
 ///    서버가 RuleManager로 검증한 뒤 성공하면 ActionLog(NetworkList)에 추가한다.
 ///    ActionLog가 곧 진행 기록이므로, 드래프트 도중 접속한 클라이언트도
 ///    NetworkList의 초기 동기화만으로 지금까지의 결과를 그대로 복원할 수 있다(late-join 대응).
+///
+/// 파일 구성 (모두 partial class로 같은 타입 - Netcode가 NetworkVariable/RPC를 인식하려면
+/// 필드/RPC 메서드가 반드시 이 NetworkBehaviour 타입 자신에 있어야 하므로, 별도 컴포넌트로
+/// 쪼개는 대신 책임별로 파일만 나눴다):
+///  - DraftSessionServer.cs         : 필드 선언, 생명주기, LocalSide (이 파일)
+///  - DraftSessionServer.Lobby.cs   : 대기실 편집 (호스트 전용 Set 계열 메서드)
+///  - DraftSessionServer.Nicknames.cs : 접속/해제에 따른 닉네임 등록·해제
+///  - DraftSessionServer.Flow.cs    : 드래프트 시작 → 씬 전환 → 로딩 → 진행 → 종료 흐름
+///  - DraftSessionServer.Turns.cs   : 진행 중 액션 제출/일시정지 RPC, 턴 제한시간
 /// </summary>
-public class DraftSessionServer : NetworkBehaviour
+public partial class DraftSessionServer : NetworkBehaviour
 {
     /// <summary>
     /// 현재 스폰돼 있는 세션 인스턴스. 서버/클라이언트 구분 없이,
@@ -48,7 +54,7 @@ public class DraftSessionServer : NetworkBehaviour
     // ---------- 대기실: 참가자 닉네임 ----------
     /// <summary>clientId별 닉네임. 접속 시 등록되고 접속 해제 시 제거된다. 전원 구독 가능.</summary>
     public readonly NetworkList<ClientNicknameEntry> Nicknames = new();
-    
+
     /// <summary>
     /// true면 호스트(ServerClientId)도 선공/후공에 배정될 수 있다 ("2인 연습 모드").
     /// 기본값 false = 기존 규칙 그대로 "호스트는 항상 관전자".
@@ -118,9 +124,11 @@ public class DraftSessionServer : NetworkBehaviour
     /// </summary>
     public readonly NetworkVariable<bool> IsPaused = new(false);
 
-    private Coroutine preDraftCountdownRoutine;
-    private Coroutine turnTimerRoutine;
-    private Coroutine postDraftCountdownRoutine;
+    // PreDraft/Turn/PostDraft 세 카운트다운이 공유하던 코루틴 로직은 NetworkCountdown으로 위임한다.
+    // 서버에서만 쓰이므로 OnNetworkSpawn의 IsServer 분기에서 생성한다.
+    private NetworkCountdown preDraftCountdown;
+    private NetworkCountdown turnCountdown;
+    private NetworkCountdown postDraftCountdown;
 
     // ---------- 진행 중 상태 (서버가 갱신, 클라는 읽기만) ----------
 
@@ -142,7 +150,7 @@ public class DraftSessionServer : NetworkBehaviour
             return null;
         }
     }
-    
+
     /// <summary>액션 거부 사유. 요청을 보낸 클라이언트에게만 전달된다 (전체 브로드캐스트 아님).</summary>
     public event Action<string> OnActionRejected;
 
@@ -159,7 +167,13 @@ public class DraftSessionServer : NetworkBehaviour
             PreDraftLoadBufferSeconds.Value = defaultPreDraftLoadBufferSeconds;
             TurnTimeLimitSeconds.Value = defaultTurnTimeLimitSeconds;
             PostDraftDisplaySeconds.Value = defaultPostDraftDisplaySeconds;
-            
+
+            // PreDraft/Turn 카운트다운은 IsPaused 체크가 필요하고, PostDraft(종료 후 안내)는
+            // 필요 없다(드래프트가 이미 끝난 뒤라 "일시정지"라는 개념 자체가 적용되지 않음).
+            preDraftCountdown = new NetworkCountdown(this, PreDraftSecondsRemaining, () => IsPaused.Value);
+            turnCountdown = new NetworkCountdown(this, TurnSecondsRemaining, () => IsPaused.Value);
+            postDraftCountdown = new NetworkCountdown(this, PostDraftSecondsRemaining);
+
             // 이미 붙어있는 클라이언트(호스트 자신 포함)도 놓치지 않도록, 구독 직후 한 번 훑어준다.
             NetworkManager.OnClientConnectedCallback += HandleClientConnectedForNickname;
             NetworkManager.OnClientDisconnectCallback += HandleClientDisconnectedForNickname;
@@ -206,7 +220,7 @@ public class DraftSessionServer : NetworkBehaviour
         Debug.Log($"[{nameof(DraftSessionServer)}] OnNetworkDespawn (session={GetEntityId()}, " +
                   $"scene={gameObject.scene.name}) @ frame {Time.frameCount}");
         if (Instance == this) Instance = null;
-        
+
         if (IsServer && NetworkManager != null)
         {
             NetworkManager.OnClientConnectedCallback -= HandleClientConnectedForNickname;
@@ -214,612 +228,13 @@ public class DraftSessionServer : NetworkBehaviour
         }
     }
 
-    // ==================== 대기실: 포맷/진영 편집 (호스트 전용) ====================
-
-    public void HostSetFormat(DraftFormatData data)
-    {
-        if (!IsServer)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostSetFormat은 서버(호스트)에서만 호출할 수 있습니다.");
-            return;
-        }
-        if (State.Value != DraftSessionState.Lobby)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 포맷을 바꿀 수 없습니다.");
-            return;
-        }
-
-        data.CopyTo(Format);
-    }
-
-    public void HostAssignSides(ulong firstClientId, ulong secondClientId)
-    {
-        if (!IsServer)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostAssignSides는 서버(호스트)에서만 호출할 수 있습니다.");
-            return;
-        }
-        if (State.Value != DraftSessionState.Lobby)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 진영을 다시 배정할 수 없습니다.");
-            return;
-        }
-        if (firstClientId == secondClientId)
-        {
-            Debug.LogError($"[{nameof(DraftSessionServer)}] 선공/후공에 같은 클라이언트를 배정할 수 없습니다.");
-            return;
-        }
-        if (!HostCanPlay.Value &&
-            (firstClientId == NetworkManager.ServerClientId || secondClientId == NetworkManager.ServerClientId))
-        {
-            // 역할 규칙(기본값): 호스트(=ServerClientId)는 관전자다. 드래프트 참가자(선공/후공)는
-            // 반드시 호스트가 아닌 클라이언트여야 한다. 이 체크는 서버 권위 지점이므로
-            // 호출부(UI)가 실수로 호스트를 넘기더라도 여기서 최종적으로 막는다.
-            // 단, HostCanPlay가 켜져 있으면("2인 연습 모드") 호스트도 참가자가 될 수 있으므로
-            // 이 방어를 건너뛴다.
-            Debug.LogError($"[{nameof(DraftSessionServer)}] 호스트(clientId={NetworkManager.ServerClientId})는 관전자이므로 " +
-                            "선공/후공에 배정할 수 없습니다. (HostCanPlay를 켜면 호스트도 참가 가능)");
-            return;
-        }
-
-        FirstSideClientId.Value = firstClientId;
-        SecondSideClientId.Value = secondClientId;
-    }
-
-    /// <summary>
-    /// "2인 연습 모드" 토글. true로 켜면 호스트 자신도 선공/후공 후보에 포함될 수 있다.
-    /// Lobby 상태에서만, 그리고 아직 진영이 배정되지 않았을 때만 바꾸도록 한다
-    /// (진행 중간에 규칙이 바뀌는 걸 막기 위함 - 이미 배정된 뒤에 끄면 참가자 중 하나가
-    /// 갑자기 관전자 취급되는 모순이 생길 수 있다).
-    /// </summary>
-    public void HostSetHostCanPlay(bool value)
-    {
-        if (!IsServer)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostSetHostCanPlay는 서버(호스트)에서만 호출할 수 있습니다.");
-            return;
-        }
-        if (State.Value != DraftSessionState.Lobby)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 이 설정을 바꿀 수 없습니다.");
-            return;
-        }
-        if (FirstSideClientId.Value != ulong.MaxValue || SecondSideClientId.Value != ulong.MaxValue)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 진영이 이미 배정된 후에는 이 설정을 바꿀 수 없습니다. " +
-                              "먼저 진영 배정을 초기화하세요.");
-            return;
-        }
-
-        HostCanPlay.Value = value;
-    }
-
-    // ==================== 서버 내부: 참가자 닉네임 등록/해제 ====================
-
-    /// <summary>
-    /// RoomAccessController가 ApprovalCheck 때 잠깐 보관해둔 닉네임을 꺼내와 Nicknames에 등록한다.
-    /// pendingNickname이 없으면(예외적 상황) "PlayerN"으로 대체한다.
-    /// </summary>
-    private void HandleClientConnectedForNickname(ulong clientId)
-    {
-        if (!IsServer) return;
-
-        var roomAccess = NetworkManager.Singleton != null
-            ? NetworkManager.Singleton.GetComponent<RoomAccessController>()
-            : null;
-
-        if (roomAccess != null && roomAccess.TryConsumePendingNickname(clientId, out var pending))
-        {
-            RemoveNicknameEntry(clientId); // 재연결 등으로 중복 등록되는 것 방지
-            Nicknames.Add(new ClientNicknameEntry { ClientId = clientId, Nickname = pending });
-            return;
-        }
-
-        // pending이 없다는 건 "이미 이 clientId에 대해 한 번 등록을 마쳤다"는 뜻일 수 있다
-        // (초기 스캔 + OnClientConnectedCallback 중복 호출 등). 이미 등록돼 있으면 손대지 않는다.
-        if (HasNicknameEntry(clientId)) return;
-
-        // 정말로 pending 닉네임도 없고 기존 등록도 없는 예외적 상황에서만 기본값 사용.
-        Nicknames.Add(new ClientNicknameEntry { ClientId = clientId, Nickname = $"Player{clientId}" });
-    }
-
-    private bool HasNicknameEntry(ulong clientId)
-    {
-        foreach (var entry in Nicknames)
-            if (entry.ClientId == clientId) return true;
-        return false;
-    }
-
-    private void HandleClientDisconnectedForNickname(ulong clientId)
-    {
-        if (!IsServer) return;
-        RemoveNicknameEntry(clientId);
-    }
-
-    private void RemoveNicknameEntry(ulong clientId)
-    {
-        for (int i = Nicknames.Count - 1; i >= 0; i--)
-        {
-            if (Nicknames[i].ClientId == clientId)
-            {
-                Nicknames.RemoveAt(i);
-                return;
-            }
-        }
-    }
-
-    /// <summary>주어진 clientId의 현재 닉네임. 아직 등록 전이면 "PlayerN"으로 대체.</summary>
-    public string GetNickname(ulong clientId)
-    {
-        foreach (var entry in Nicknames)
-            if (entry.ClientId == clientId) return entry.Nickname.ToString();
-        return $"Player{clientId}";
-    }
-    
-    /// <summary>
-    /// 대기실 참가자 목록 UI에서 특정 클라이언트 한 명의 역할(관전자/선공/후공)을 명시적으로 바꾼다.
-    /// 기존 HostAssignSides가 "선공+후공 두 명을 한 번에" 지정하는 API였다면, 이건 "한 명만" 바꿀 때 쓴다 -
-    /// 예를 들어 이미 참가 중인 사람을 관전자로 내리거나(role=null), 관전자를 특정 진영에 새로 앉힐 때.
-    ///
-    /// 역할은 FirstSideClientId/SecondSideClientId 두 값만으로 파생되고 별도의 "관전자 목록"이 없으므로,
-    /// 어떤 클라이언트를 새로 선공/후공에 앉히면 그 자리에 있던 기존 클라이언트는 자동으로
-    /// (변수값이 더 이상 자기 id와 일치하지 않게 되어) 관전자로 밀려난다.
-    /// </summary>
-    public void HostSetParticipantRole(ulong clientId, DraftSide? role)
-    {
-        if (!IsServer)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostSetParticipantRole은 서버(호스트)에서만 호출할 수 있습니다.");
-            return;
-        }
-        if (State.Value != DraftSessionState.Lobby)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 참가자 역할을 바꿀 수 없습니다.");
-            return;
-        }
-        if (role != null && !HostCanPlay.Value && clientId == NetworkManager.ServerClientId)
-        {
-            // HostAssignSides와 동일한 방어: "2인 연습 모드"가 아니면 호스트는 항상 관전자.
-            Debug.LogError($"[{nameof(DraftSessionServer)}] 호스트(clientId={NetworkManager.ServerClientId})는 관전자이므로 " +
-                            "참가자로 배정할 수 없습니다. (HostCanPlay를 켜면 호스트도 참가 가능)");
-            return;
-        }
-
-        switch (role)
-        {
-            case null: // 관전자로 내림
-                if (FirstSideClientId.Value == clientId) FirstSideClientId.Value = ulong.MaxValue;
-                if (SecondSideClientId.Value == clientId) SecondSideClientId.Value = ulong.MaxValue;
-                break;
-
-            case DraftSide.First:
-                if (SecondSideClientId.Value == clientId) SecondSideClientId.Value = ulong.MaxValue; // 같은 사람이 양쪽에 겹치지 않도록
-                FirstSideClientId.Value = clientId; // 기존 선공이 있었다면 값이 바뀌는 순간 자동으로 관전자 취급됨
-                break;
-
-            case DraftSide.Second:
-                if (FirstSideClientId.Value == clientId) FirstSideClientId.Value = ulong.MaxValue;
-                SecondSideClientId.Value = clientId;
-                break;
-        }
-    }
-
-    /// <summary>
-    /// 대기실에서 preDraft 로딩 유예시간 / 턴 제한시간 / 종료 후 안내 카운트다운 시간을
-    /// 세션 공통값으로 설정한다. 라운드별로 다르지 않고 세션 전체에 하나만 존재하는 값이므로,
-    /// 어느 라운드 행(UI)에서 값을 바꾸든 이 메서드를 거쳐 전체(NetworkVariable)에 반영되고
-    /// 모든 클라이언트 화면에 동기화된다.
-    /// Lobby 상태에서만 변경 가능(진행 중에 바뀌면 이미 시작된 카운트다운과 어긋날 수 있으므로).
-    /// </summary>
-    public void HostSetTimerSettings(float preDraftBufferSeconds, float turnTimeLimitSecondsValue, float postDraftDisplaySecondsValue)
-    {
-        if (!IsServer)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostSetTimerSettings는 서버(호스트)에서만 호출할 수 있습니다.");
-            return;
-        }
-        if (State.Value != DraftSessionState.Lobby)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 드래프트 시작 후에는 타이머 설정을 바꿀 수 없습니다.");
-            return;
-        }
-
-        PreDraftLoadBufferSeconds.Value = Mathf.Max(0f, preDraftBufferSeconds);
-        TurnTimeLimitSeconds.Value = Mathf.Max(0f, turnTimeLimitSecondsValue);
-        PostDraftDisplaySeconds.Value = Mathf.Max(0f, postDraftDisplaySecondsValue);
-    }
-
-    // ==================== 대기실 -> 드래프트 시작 (호스트 전용) ====================
-
-    public void HostStartDraft()
-    {
-        if (!IsServer)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] HostStartDraft는 서버(호스트)에서만 호출할 수 있습니다.");
-            return;
-        }
-        if (State.Value != DraftSessionState.Lobby)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 이미 시작됐거나 종료된 세션입니다.");
-            return;
-        }
-        if (Format.Count == 0)
-        {
-            Debug.LogError($"[{nameof(DraftSessionServer)}] 라운드가 1개 이상 있어야 드래프트를 시작할 수 있습니다.");
-            return;
-        }
-        if (FirstSideClientId.Value == ulong.MaxValue || SecondSideClientId.Value == ulong.MaxValue)
-        {
-            Debug.LogError($"[{nameof(DraftSessionServer)}] 선공/후공 진영이 아직 배정되지 않았습니다.");
-            return;
-        }
-
-        var sceneManager = NetworkManager.SceneManager;
-        if (sceneManager == null)
-        {
-            Debug.LogError($"[{nameof(DraftSessionServer)}] NetworkManager의 Scene Management가 꺼져 있습니다. " +
-                            "인스펙터에서 Enable Scene Management를 켜주세요.");
-            return;
-        }
-
-        sceneManager.OnLoadEventCompleted += HandleDraftSceneLoaded;
-        var status = sceneManager.LoadScene(draftSceneName, LoadSceneMode.Single);
-
-        if (status != SceneEventProgressStatus.Started)
-        {
-            sceneManager.OnLoadEventCompleted -= HandleDraftSceneLoaded;
-            Debug.LogError($"[{nameof(DraftSessionServer)}] 씬 전환을 시작하지 못했습니다: {status}. " +
-                            $"씬 '{draftSceneName}'이 Build Settings에 등록되어 있는지 확인하세요.");
-        }
-    }
-
-    /// <summary>
-    /// 서버와 모든 클라이언트가 draftSceneName 로드를 마쳤을 때 호출됨.
-    /// 이 시점부터 실제로 밴/픽을 시작한다 - 씬 전환 중에 이미 턴이 진행되어
-    /// 일부 클라이언트가 첫 턴을 놓치는 상황을 막기 위함.
-    /// </summary>
-    private void HandleDraftSceneLoaded(string sceneName, LoadSceneMode mode, List<ulong> clientsCompleted, List<ulong> clientsTimedOut)
-    {
-        if (sceneName != draftSceneName) return;
-
-        NetworkManager.SceneManager.OnLoadEventCompleted -= HandleDraftSceneLoaded;
-
-        if (clientsTimedOut != null && clientsTimedOut.Count > 0)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 씬 로드에 실패한 클라이언트: " +
-                              string.Join(",", clientsTimedOut));
-        }
-
-        BeginPreDraftCountdown();
-    }
-
-    /// <summary>
-    /// 밴픽씬 로드가 전원 완료된 시점 ~ 실제 드래프트 시작 사이에 유예 시간을 둔다.
-    /// 씬 전환 자체는 끝났어도 캐릭터 아이콘 로드(Addressables 등) 같은 클라이언트 UI 준비가
-    /// 아직 안 끝났을 수 있어서, "혹시 모를" 여유 시간을 준 뒤 자동으로 밴/픽을 시작시킨다.
-    /// </summary>
-    private void BeginPreDraftCountdown()
-    {
-        State.Value = DraftSessionState.Loading;
-        IsPaused.Value = false; // Loading 진입 시에도 이전 상태가 남아있지 않도록 확실히 초기화
-        Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to Loading, " +
-                  $"{PreDraftLoadBufferSeconds.Value}초 후 자동으로 드래프트를 시작합니다.");
-
-        if (preDraftCountdownRoutine != null) StopCoroutine(preDraftCountdownRoutine);
-        preDraftCountdownRoutine = StartCoroutine(PreDraftCountdownRoutine());
-    }
-
-    private IEnumerator PreDraftCountdownRoutine()
-    {
-        float remaining = Mathf.Max(0f, PreDraftLoadBufferSeconds.Value);
-        PreDraftSecondsRemaining.Value = Mathf.Ceil(remaining);
-
-        while (remaining > 0f)
-        {
-            yield return null;
-
-            // 일시정지 중에는 이번 프레임의 경과 시간을 그냥 버린다 - remaining을 건드리지 않으므로
-            // 코루틴을 취소/재시작하지 않고도 정확히 멈췄던 지점에서 다시 흐르게 된다.
-            if (IsPaused.Value)
-            {
-                Debug.Log($"[PreDraftTimer] paused, skip. remaining={remaining}"); // 임시
-                continue;
-            }
-
-            remaining -= Time.deltaTime;
-
-            // NetworkVariable은 값이 실제로 바뀔 때만 트래픽을 보내므로, 프레임마다가 아니라
-            // 초 단위(올림)로만 갱신해서 불필요한 동기화를 줄인다.
-            float rounded = Mathf.Max(0f, Mathf.Ceil(remaining));
-            if (!Mathf.Approximately(rounded, PreDraftSecondsRemaining.Value))
-            {
-                PreDraftSecondsRemaining.Value = rounded;
-                Debug.Log($"[PreDraftTimer] tick -> {rounded}"); // 임시
-            }
-        }
-
-        PreDraftSecondsRemaining.Value = 0f;
-        preDraftCountdownRoutine = null;
-        BeginDraft();
-    }
-
-    private void BeginDraft()
-    {
-        var formatData = Format.ToDraftFormatData();
-
-        ruleManager = new RuleManager(formatData);
-        ruleManager.OnActionSubmitted += HandleServerActionSubmitted;
-        ruleManager.OnPhaseChanged += HandleServerPhaseChanged;
-        ruleManager.OnDraftCompleted += HandleServerDraftCompleted;
-
-        ActionLog.Clear();
-        IsPaused.Value = false; // 혹시 남아있을 수 있는 이전 상태를 새 드래프트 시작 시 확실히 초기화
-        State.Value = DraftSessionState.InProgress;
-        Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to InProgress " +
-                  $"(session={GetEntityId()}, IsSpawned={NetworkObject.IsSpawned}, " +
-                  $"scene={gameObject.scene.name}) @ frame {Time.frameCount}");
-        ruleManager.StartDraft(); // 내부에서 OnPhaseChanged가 발행되어 첫 턴 타이머도 자동으로 시작된다.
-    }
-
-    // ==================== 진행 중: 액션 제출 (모든 클라이언트) ====================
-
-    [ServerRpc(RequireOwnership = false)]
-    public void SubmitActionServerRpc(string characterId, ServerRpcParams rpcParams = default)
-    {
-        var senderClientId = rpcParams.Receive.SenderClientId;
-
-        if (State.Value != DraftSessionState.InProgress || ruleManager == null)
-        {
-            RejectClientRpc("드래프트가 진행 중이 아닙니다.", ToTarget(senderClientId));
-            return;
-        }
-
-        if (IsPaused.Value)
-        {
-            RejectClientRpc("일시정지 중에는 밴/픽을 제출할 수 없습니다.", ToTarget(senderClientId));
-            return;
-        }
-
-        if (!TryResolveSide(senderClientId, out var side))
-        {
-            RejectClientRpc("이 세션에 배정된 진영이 아닙니다.", ToTarget(senderClientId));
-            return;
-        }
-
-        if (!ruleManager.SubmitAction(side, characterId, out var error))
-        {
-            RejectClientRpc(error, ToTarget(senderClientId));
-        }
-
-        // 성공했을 때는 별도로 브로드캐스트하지 않는다.
-        // HandleServerActionSubmitted가 ActionLog(NetworkList)에 추가하고,
-        // NetworkList/NetworkVariable의 자동 동기화가 모든 클라이언트(및 이후 접속자)에게 전파한다.
-    }
-
-    private bool TryResolveSide(ulong clientId, out DraftSide side)
-    {
-        if (clientId == FirstSideClientId.Value) { side = DraftSide.First; return true; }
-        if (clientId == SecondSideClientId.Value) { side = DraftSide.Second; return true; }
-        side = default;
-        return false;
-    }
-
-    private static ClientRpcParams ToTarget(ulong clientId) => new ClientRpcParams
-    {
-        Send = new ClientRpcSendParams { TargetClientIds = new[] { clientId } }
-    };
-
-    [ClientRpc]
-    private void RejectClientRpc(string reason, ClientRpcParams rpcParams = default) =>
-        OnActionRejected?.Invoke(reason);
-
-    // ==================== 진행 중: 일시정지(보험용 긴급 정지) ====================
-
-    /// <summary>
-    /// 일시정지 상태를 요청한다. pause=true면 정지, false면 해제.
-    /// 호스트(ServerClientId) 또는 이 세션에 배정된 참가자(선공/후공)만 호출할 수 있고,
-    /// 그 외(관전자 등)의 요청은 서버에서 거부한다.
-    /// </summary>
-    [ServerRpc(RequireOwnership = false)]
-    public void RequestPauseServerRpc(bool pause, ServerRpcParams rpcParams = default)
-    {
-        var senderClientId = rpcParams.Receive.SenderClientId;
-
-        if (State.Value != DraftSessionState.Loading && State.Value != DraftSessionState.InProgress)
-        {
-            RejectClientRpc("드래프트 진행 중(로딩 포함)이 아닐 때는 일시정지를 사용할 수 없습니다.", ToTarget(senderClientId));
-            return;
-        }
-
-        bool isHostOrParticipant = senderClientId == NetworkManager.ServerClientId ||
-                                    senderClientId == FirstSideClientId.Value ||
-                                    senderClientId == SecondSideClientId.Value;
-        if (!isHostOrParticipant)
-        {
-            RejectClientRpc("호스트 또는 이 세션의 참가자만 일시정지를 사용할 수 있습니다.", ToTarget(senderClientId));
-            return;
-        }
-
-        if (IsPaused.Value == pause) return; // 이미 같은 상태면 아무것도 하지 않음
-
-        IsPaused.Value = pause;
-        Debug.Log($"[{nameof(DraftSessionServer)}] IsPaused set to {pause} (요청자 clientId={senderClientId}) " +
-                  $"@ frame {Time.frameCount}");
-    }
-
-    // ==================== 서버 내부: RuleManager 이벤트 -> 동기화 데이터 반영 ====================
-
-    private void HandleServerActionSubmitted(DraftSide side, string characterId, DraftResultType type)
-    {
-        ActionLog.Add(new NetworkDraftAction
-        {
-            side = side,
-            characterId = characterId,
-            resultType = type
-        });
-
-        // 페이즈가 아직 안 끝났다면(=같은 페이즈 안에서 다음 사람 차례로 넘어간 것) 여기서 턴 타이머를
-        // 다시 시작한다. 페이즈가 끝났다면 곧이어 HandleServerPhaseChanged가 호출되므로 거기서 시작한다.
-        if (ruleManager != null && ruleManager.CurrentPhase != null && !ruleManager.CurrentPhase.IsComplete)
-        {
-            CurrentSide.Value = ruleManager.CurrentPhase.CurrentSide; // 같은 페이즈 내 턴 교대도 반영
-            RestartTurnTimer();
-        }
-    }
-
-    private void HandleServerPhaseChanged(IDraftPhase phase)
-    {
-        CurrentPhaseName.Value = phase.PhaseName;
-        CurrentSide.Value = phase.CurrentSide;
-        RestartTurnTimer();
-    }
-
-    private void HandleServerDraftCompleted()
-    {
-        State.Value = DraftSessionState.Completed;
-        StopTurnTimer();
-        BeginPostDraftCountdown();
-    }
-
-    // ==================== 서버 내부: 종료 후 안내 카운트다운 ====================
-
-    /// <summary>
-    /// PostDraftDisplaySeconds가 0보다 크면 PostDraftSecondsRemaining을 그 값에서 0까지
-    /// 서버 권위로 카운트다운한다(PreDraftCountdownRoutine과 동일한 패턴). 0 이하로 설정되어 있으면
-    /// 카운트다운을 시작하지 않고 0으로 둔다 - 이 경우 PostDraftTimerIndicator가 로컬 경과 시간
-    /// 표시로 대체한다.
-    /// </summary>
-    private void BeginPostDraftCountdown()
-    {
-        if (postDraftCountdownRoutine != null) StopCoroutine(postDraftCountdownRoutine);
-
-        if (PostDraftDisplaySeconds.Value <= 0f)
-        {
-            PostDraftSecondsRemaining.Value = 0f;
-            postDraftCountdownRoutine = null;
-            return;
-        }
-
-        postDraftCountdownRoutine = StartCoroutine(PostDraftCountdownRoutine());
-    }
-
-    private IEnumerator PostDraftCountdownRoutine()
-    {
-        float remaining = PostDraftDisplaySeconds.Value;
-        PostDraftSecondsRemaining.Value = Mathf.Ceil(remaining);
-
-        while (remaining > 0f)
-        {
-            yield return null;
-
-            remaining -= Time.deltaTime;
-
-            float rounded = Mathf.Max(0f, Mathf.Ceil(remaining));
-            if (!Mathf.Approximately(rounded, PostDraftSecondsRemaining.Value))
-                PostDraftSecondsRemaining.Value = rounded;
-        }
-
-        PostDraftSecondsRemaining.Value = 0f;
-        postDraftCountdownRoutine = null;
-    }
-
-    // ==================== 서버 내부: 밴/픽 턴 제한 시간 ====================
-
-    private void RestartTurnTimer()
-    {
-        if (turnTimerRoutine != null) StopCoroutine(turnTimerRoutine);
-
-        if (TurnTimeLimitSeconds.Value <= 0f)
-        {
-            TurnSecondsRemaining.Value = 0f;
-            turnTimerRoutine = null;
-            return;
-        }
-
-        turnTimerRoutine = StartCoroutine(TurnTimerRoutine());
-    }
-
-    private void StopTurnTimer()
-    {
-        if (turnTimerRoutine != null) StopCoroutine(turnTimerRoutine);
-        turnTimerRoutine = null;
-        TurnSecondsRemaining.Value = 0f;
-    }
-
-    private IEnumerator TurnTimerRoutine()
-    {
-        float remaining = TurnTimeLimitSeconds.Value;
-        TurnSecondsRemaining.Value = Mathf.Ceil(remaining);
-
-        while (remaining > 0f)
-        {
-            yield return null;
-
-            // PreDraftCountdownRoutine과 동일한 방식: 일시정지 중엔 경과 시간을 버려서 그 자리에서 멈춘다.
-            if (IsPaused.Value) continue;
-
-            remaining -= Time.deltaTime;
-
-            float rounded = Mathf.Max(0f, Mathf.Ceil(remaining));
-            if (!Mathf.Approximately(rounded, TurnSecondsRemaining.Value))
-                TurnSecondsRemaining.Value = rounded;
-        }
-
-        TurnSecondsRemaining.Value = 0f;
-        turnTimerRoutine = null;
-        HandleTurnTimedOut();
-    }
-
-    /// <summary>
-    /// 제한 시간 안에 아무도 선택하지 않았을 때, 서버가 현재 차례인 진영을 대신해
-    /// 아직 사용되지 않은 캐릭터 중 하나를 무작위로 골라 제출한다.
-    /// SubmitAction이 성공하면 RuleManager의 OnActionSubmitted/OnPhaseChanged가 그대로 발행되므로
-    /// ActionLog 반영이나 다음 턴 타이머 시작은 기존 핸들러가 알아서 처리한다.
-    /// </summary>
-    private void HandleTurnTimedOut()
-    {
-        if (ruleManager == null || State.Value != DraftSessionState.InProgress) return;
-
-        var phase = ruleManager.CurrentPhase;
-        if (phase == null || phase.IsComplete) return;
-
-        var side = phase.CurrentSide;
-        var autoPickId = PickRandomAvailableCharacterId();
-
-        if (autoPickId == null)
-        {
-            Debug.LogWarning($"[{nameof(DraftSessionServer)}] 턴 시간 초과: 자동으로 선택할 수 있는 캐릭터가 없습니다.");
-            return;
-        }
-
-        if (!ruleManager.SubmitAction(side, autoPickId, out var error))
-        {
-            Debug.LogError($"[{nameof(DraftSessionServer)}] 턴 시간 초과 자동 선택 실패: {error}");
-            return;
-        }
-
-        Debug.Log($"[{nameof(DraftSessionServer)}] 턴 시간 초과 - {side}의 {phase.PhaseName}을(를) 자동으로 대신 선택: {autoPickId}");
-    }
-
-    /// <summary>CharDatabaseLoader에 로드되어 있는 전체 캐릭터 중, 아직 밴/픽되지 않은 것 하나를 무작위로 반환.</summary>
-    private string PickRandomAvailableCharacterId()
-    {
-        var candidates = new List<string>();
-        foreach (var id in CharDatabaseLoader.AllIds)
-        {
-            if (ruleManager.IsCharacterAvailable(id))
-                candidates.Add(id);
-        }
-
-        if (candidates.Count == 0) return null;
-        return candidates[UnityEngine.Random.Range(0, candidates.Count)];
-    }
-
     public override void OnDestroy()
     {
-        if (preDraftCountdownRoutine != null) StopCoroutine(preDraftCountdownRoutine);
-        if (turnTimerRoutine != null) StopCoroutine(turnTimerRoutine);
-        if (postDraftCountdownRoutine != null) StopCoroutine(postDraftCountdownRoutine);
+        // NetworkVariable 값(Stop())까지는 건드리지 않고 코루틴만 멈춘다 - 이미 스폰 해제 중일 수 있는
+        // 시점이라 NetworkVariable 쓰기가 안전하지 않을 수 있다 (클라이언트에서는 애초에 null이라 no-op).
+        preDraftCountdown?.Cancel();
+        turnCountdown?.Cancel();
+        postDraftCountdown?.Cancel();
 
         if (ruleManager != null)
         {
@@ -834,16 +249,4 @@ public class DraftSessionServer : NetworkBehaviour
         if (Instance == this) Instance = null;
         base.OnDestroy();
     }
-}
-
-/// <summary>대기실(설정 편집) → 로딩 대기 → 진행 중 → 종료, 세션의 큰 흐름.</summary>
-public enum DraftSessionState
-{
-    Lobby,
-
-    /// <summary>밴픽씬 로드 완료 ~ 실제 드래프트 시작 전, UI 로딩 유예 시간(기본 15초) 동안의 상태.</summary>
-    Loading,
-
-    InProgress,
-    Completed
 }
