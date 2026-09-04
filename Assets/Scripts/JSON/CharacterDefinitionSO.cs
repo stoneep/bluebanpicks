@@ -4,7 +4,7 @@ public enum Affiliation
 {
     hyakkiyako, redwinter, trinity, gehenna, abydos,
     millennium, arius, shanhaijing, valkyrie, srt,
-    highlander, wildhunt, etc
+    highlander, wildhunt, odyssey,  etc
 }
 
 public enum WeaponClass

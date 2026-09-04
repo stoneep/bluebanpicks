@@ -44,24 +44,34 @@ public class DraftBoardController : MonoBehaviour
     public DraftSide? CurrentSide => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentSide.Value : null;
     public string CurrentPhaseName => (session != null && session.State.Value == DraftSessionState.InProgress) ? session.CurrentPhaseName.Value.ToString() : null;
 
+    // private void Start()
+    // {
+    //     if (session != null)
+    //     {
+    //         Bind(session);
+    //     }
+    //     else if (DraftSessionServer.Instance != null)
+    //     {
+    //         
+    //         Bind(DraftSessionServer.Instance);
+    //     }
+    //     else
+    //     {
+    //         
+    //         DraftSessionServer.OnSessionReady += Bind;
+    //     }
+    // }
+
     private void Start()
     {
-        if (session != null)
-        {
-            Bind(session);
-        }
-        else if (DraftSessionServer.Instance != null)
-        {
-            
-            Bind(DraftSessionServer.Instance);
-        }
-        else
-        {
-            
-            DraftSessionServer.OnSessionReady += Bind;
-        }
+        TrySelfBind();
+        DraftSessionServer.OnSessionReady += Bind;  // 놓치더라도 나중을 위해 항상 구독
     }
-
+    private void TrySelfBind()
+    {
+        if (session != null) { Bind(session); return; }
+        if (DraftSessionServer.Instance != null) Bind(DraftSessionServer.Instance);
+    }
     private void OnDestroy()
     {
         DraftSessionServer.OnSessionReady -= Bind;
