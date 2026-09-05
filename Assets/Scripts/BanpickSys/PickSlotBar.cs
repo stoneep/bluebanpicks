@@ -2,12 +2,22 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum PickSlotFillDirection
+{
+    FromStart, // 기존과 동일: 논리적 0번 슬롯 = contentRoot의 첫 번째 자식 (세로 바는 항상 이거)
+    FromEnd    // 논리적 0번 슬롯 = contentRoot의 마지막 자식 (가로 바에서 오른쪽부터 채울 때)
+}
+
 public sealed class PickSlotBar : MonoBehaviour
 {
     [Header("Base Settings")]
     [SerializeField] private PickedCharacterView slotPrefab;
     [SerializeField] private Transform contentRoot; 
 
+    [Header("Layout")]
+    [Tooltip("가로 배치 바에서만 의미 있음. 세로 바는 FromStart로 두면 기존 동작 그대로.")]
+    [SerializeField] private PickSlotFillDirection fillDirection = PickSlotFillDirection.FromStart;
+    
     [Header("Config")]
     [SerializeField] private PickSlotBarConfig config = new();
     private readonly List<PickedCharacterView> slots = new();
@@ -62,6 +72,8 @@ public sealed class PickSlotBar : MonoBehaviour
             slot.Clear();
             slots.Add(slot);
         }
+
+        ApplyFillDirection();
     }
 
     private void CleanupExisting()
@@ -73,6 +85,16 @@ public sealed class PickSlotBar : MonoBehaviour
         slots.Clear();
     }
 
+    // 논리적 인덱스(=픽/밴 제출 순서, slots 리스트의 인덱스)는 그대로 두고,
+    // contentRoot 안에서의 실제 표시 위치(sibling index)만 뒤집는다.
+    private void ApplyFillDirection()
+    {
+        if (fillDirection != PickSlotFillDirection.FromEnd) return;
+
+        for (int i = 0; i < slots.Count; i++)
+            slots[i].transform.SetSiblingIndex(slots.Count - 1 - i);
+    }
+    
     public void SetCharacter(int index, string characterId)
     {
         SafeInitialize(); 

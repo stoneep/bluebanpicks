@@ -16,7 +16,7 @@ public static class CharacterAddressablesAutoSet
     
     private static readonly Dictionary<string, string> SuffixToAddress = new(StringComparer.OrdinalIgnoreCase)
     {
-        { "",           "portrait_large" },
+        { "large",           "portrait_large" },
         { "small",      "portrait_small" },
         { "collection", "portrait_collection" },
         { "slot",       "portrait_slot" },
