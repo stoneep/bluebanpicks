@@ -96,6 +96,7 @@ public partial class DraftSessionServer
         ruleManager.OnDraftCompleted += HandleServerDraftCompleted;
 
         ActionLog.Clear();
+        PendingPreviewCharacterId.Value = string.Empty; // 추가
         IsPaused.Value = false; // 혹시 남아있을 수 있는 이전 상태를 새 드래프트 시작 시 확실히 초기화
         State.Value = DraftSessionState.InProgress;
         Debug.Log($"[{nameof(DraftSessionServer)}] State.Value set to InProgress " +
@@ -108,6 +109,8 @@ public partial class DraftSessionServer
 
     private void HandleServerActionSubmitted(DraftSide side, string characterId, DraftResultType type)
     {
+        PendingPreviewCharacterId.Value = string.Empty; // 추가 - 확정되었으니 프리뷰는 무의미해짐
+        
         ActionLog.Add(new NetworkDraftAction
         {
             side = side,
@@ -126,6 +129,7 @@ public partial class DraftSessionServer
 
     private void HandleServerPhaseChanged(IDraftPhase phase)
     {
+        PendingPreviewCharacterId.Value = string.Empty; // 추가 (안전망 - 위에서 이미 비워지지만 이중 방지)
         CurrentPhaseName.Value = phase.PhaseName;
         CurrentSide.Value = phase.CurrentSide;
         RestartTurnTimer();
@@ -133,6 +137,7 @@ public partial class DraftSessionServer
 
     private void HandleServerDraftCompleted()
     {
+        PendingPreviewCharacterId.Value = string.Empty; // 추가
         State.Value = DraftSessionState.Completed;
         turnCountdown.Stop();
         BeginPostDraftCountdown();

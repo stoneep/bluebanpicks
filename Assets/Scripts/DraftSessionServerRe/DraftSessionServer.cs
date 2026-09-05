@@ -135,6 +135,14 @@ public partial class DraftSessionServer : NetworkBehaviour
     public readonly NetworkList<NetworkDraftAction> ActionLog = new();
 
     /// <summary>
+    /// 현재 턴인 진영이 아직 확정 제출하지 않고 "미리보기" 중인 캐릭터 ID.
+    /// 비어있으면 프리뷰 없음. 오직 서버(UpdatePendingPreviewServerRpc)만 값을 바꾸고,
+    /// 확정 픽/밴이 아니라 UI 표시 목적이므로 RuleManager 검증 대상이 아니다.
+    /// 턴/페이즈가 넘어가거나 드래프트가 끝나면 서버가 자동으로 비운다.
+    /// </summary>
+    public readonly NetworkVariable<FixedString32Bytes> PendingPreviewCharacterId = new();
+    
+    /// <summary>
     /// 이 로컬 클라이언트가 배정된 진영. 참가자가 아니거나(관전자/호스트) 
     /// 아직 배정되지 않았다면 null.
     /// </summary>

@@ -38,6 +38,39 @@ public partial class DraftSessionServer
         // NetworkList/NetworkVariable의 자동 동기화가 모든 클라이언트(및 이후 접속자)에게 전파한다.
     }
 
+    // 클릭 폭주(매크로 등)로부터 서버를 보호하기 위한 최소 요청 간격
+    private readonly Dictionary<ulong, float> lastPreviewRequestTime = new();
+    private const float MinPreviewIntervalSeconds = 0.1f; // 클라이언트당 최대 초당 10회
+
+    [ServerRpc(RequireOwnership = false)]
+    public void UpdatePendingPreviewServerRpc(string characterId, ServerRpcParams rpcParams = default)
+    {
+        var senderClientId = rpcParams.Receive.SenderClientId;
+
+        // 실패해도 사용자에게 알릴 필요 없는 "가벼운" 요청이므로 조용히 무시한다.
+        if (State.Value != DraftSessionState.InProgress || IsPaused.Value) return;
+        if (!TryResolveSide(senderClientId, out var side)) return;
+        if (side != CurrentSide.Value) return; // 지금 자기 턴이 아니면 무시
+
+        // 초당 요청 횟수 제한 (치팅/매크로/버그로 인한 RPC 스팸 방지)
+        float now = Time.realtimeSinceStartup;
+        if (lastPreviewRequestTime.TryGetValue(senderClientId, out var last) &&
+            now - last < MinPreviewIntervalSeconds)
+        {
+            return;
+        }
+        lastPreviewRequestTime[senderClientId] = now;
+
+        // 이미 밴/픽된 캐릭터를 프리뷰로 세팅하려는 요청도 막는다.
+        if (!string.IsNullOrEmpty(characterId) &&
+            (ruleManager == null || !ruleManager.IsCharacterAvailable(characterId)))
+        {
+            return;
+        }
+
+        PendingPreviewCharacterId.Value = characterId ?? string.Empty;
+    }
+    
     private bool TryResolveSide(ulong clientId, out DraftSide side)
     {
         if (clientId == FirstSideClientId.Value) { side = DraftSide.First; return true; }

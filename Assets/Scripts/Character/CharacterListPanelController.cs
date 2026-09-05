@@ -28,20 +28,10 @@ public sealed class CharacterListPanelController : MonoBehaviour
     private readonly CharacterFilterRules rules = new();
     
     private readonly List<CharacterViewData> allData = new();
-
-    
-    
-    
-    
     private string pendingCharacterId;
-
     
     private readonly AtlasPreloader atlasPreloader = new();
     private CharacterArtProvider preloadArtProvider;
-
-    
-    
-    
     
     public event Action<string> OnDraftSubmitFailed;
 
@@ -87,10 +77,8 @@ public sealed class CharacterListPanelController : MonoBehaviour
             draftBoardController.OnActionSubmitted += HandleDraftActionSubmitted;
             draftBoardController.OnActionRejected += HandleDraftActionRejected;
         }
-
         
         ClearPendingSelection();
-
         RefreshView();
     }
 
@@ -165,39 +153,15 @@ public sealed class CharacterListPanelController : MonoBehaviour
         
         PreloadPortraits(allData);
     }
-
-    
-    
-    
-
-    
-    
-    
-    
-    
     
     private void HandleCharacterPicked(CharacterViewData data)
     {
-        if (!draftBoardController) return; 
-
-        if (!draftBoardController.IsSessionActive)
-        {
-            
-            
-            
-            
-            return;
-        }
-
-        if (!draftBoardController.IsCharacterAvailable(data.Id))
-        {
-            
-            return;
-        }
+        if (!draftBoardController) return;
+        if (!draftBoardController.IsSessionActive) return;
+        if (!draftBoardController.IsCharacterAvailable(data.Id)) return;
 
         if (pendingCharacterId == data.Id)
         {
-            
             ClearPendingSelection();
             return;
         }
@@ -205,17 +169,14 @@ public sealed class CharacterListPanelController : MonoBehaviour
         pendingCharacterId = data.Id;
         if (view) view.SetSelectedCharacter(pendingCharacterId);
         UpdateConfirmButtonInteractable();
+        
+        // 내 턴일 때만 서버로 전송 - 남의 턴에 구경하듯 클릭하는 것까지 네트워크를 태우지 않는다.
+        if (draftBoardController.CurrentSide.HasValue &&
+            draftBoardController.CurrentSide == draftBoardController.LocalSide)
+        {
+            draftBoardController.RequestPreview(pendingCharacterId);
+        }
     }
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
     
     private void OnClickConfirmAction()
     {
@@ -224,49 +185,37 @@ public sealed class CharacterListPanelController : MonoBehaviour
         draftBoardController.SubmitCharacter(pendingCharacterId);
         ClearPendingSelection();
     }
-
     
     private void ClearPendingSelection()
     {
         pendingCharacterId = null;
         if (view) view.SetSelectedCharacter(null);
         UpdateConfirmButtonInteractable();
+        
+        if (draftBoardController != null &&
+            draftBoardController.CurrentSide.HasValue &&
+            draftBoardController.CurrentSide == draftBoardController.LocalSide)
+        {
+            draftBoardController.ClearPreview();
+        }
     }
-
     
     private void UpdateConfirmButtonInteractable()
     {
         if (confirmActionButton) confirmActionButton.interactable = !string.IsNullOrEmpty(pendingCharacterId);
     }
-
     
     private void HandleDraftActionRejected(string reason)
     {
         Debug.LogWarning($"[{nameof(CharacterListPanelController)}] 밴/픽 거부: {reason}");
         OnDraftSubmitFailed?.Invoke(reason);
     }
-
-    
-    
-    
-    
-    
-    
-    
     
     private void HandleDraftActionSubmitted(DraftSide side, string characterId, DraftResultType type)
     {
         if (pendingCharacterId == characterId) ClearPendingSelection();
         RefreshView(jumpToTop: false);
     }
-
-    
-    
-    
-
-    
-    
-    
     
     private void PreloadAtlases()
     {

@@ -17,6 +17,11 @@ public class DraftBoardController : MonoBehaviour
     [SerializeField] private PickSlotBar secondBanBar;   
     [SerializeField] private PickSlotBar secondPickBar;  
 
+    private PickSlotBar currentPreviewBar;
+    private int currentPreviewIndex = -1;
+
+    public DraftSide? LocalSide => session != null ? session.LocalSide : null; // 추가
+    
     private readonly Dictionary<(DraftSide side, DraftResultType type), int> barCursor = new();
     private readonly HashSet<string> usedCharacterIds = new(); 
     private string lastAnnouncedPhaseName;
@@ -99,6 +104,7 @@ public class DraftBoardController : MonoBehaviour
         session.OnActionRejected += HandleActionRejected;
         session.CurrentSide.OnValueChanged += HandleCurrentSideChanged;
         session.CurrentPhaseName.OnValueChanged += HandleCurrentPhaseNameChanged;
+        session.PendingPreviewCharacterId.OnValueChanged += HandlePendingPreviewChanged; // 추가
         
         if (session.Format.Count > 0) RebuildBars();
         ReplayExistingActions();
@@ -114,6 +120,7 @@ public class DraftBoardController : MonoBehaviour
         session.OnActionRejected -= HandleActionRejected;
         session.CurrentSide.OnValueChanged -= HandleCurrentSideChanged;
         session.CurrentPhaseName.OnValueChanged -= HandleCurrentPhaseNameChanged;
+        session.PendingPreviewCharacterId.OnValueChanged -= HandlePendingPreviewChanged; // 추가
         
         session = null;
         lastAnnouncedPhaseName = null;
@@ -149,6 +156,9 @@ public class DraftBoardController : MonoBehaviour
         secondPickBar.ClearAll();
         barCursor.Clear();
         usedCharacterIds.Clear();
+        
+        currentPreviewBar = null; // 추가 - 재구성 후 낡은 슬롯 참조가 남지 않게
+        currentPreviewIndex = -1;
     }
     
     private void ClearAllNextSlotHighlights()
@@ -219,6 +229,34 @@ public class DraftBoardController : MonoBehaviour
         UpdateNextSlotIndicator();
     }
 
+    // 서버로부터 프리뷰 상태가 바뀌었다는 동기화를 받았을 때 (내 클릭이든 상대 클릭이든 동일하게 처리됨)
+    private void HandlePendingPreviewChanged(FixedString32Bytes previous, FixedString32Bytes current)
+    {
+        string id = current.ToString();
+
+        if (string.IsNullOrEmpty(id))
+        {
+            // 지울 땐 "지금" 기준으로 다시 계산하지 않고, 저장해둔 슬롯을 그대로 지운다.
+            // (턴이 이미 넘어가서 CurrentSide/Phase가 바뀐 뒤에 이 콜백이 도착할 수 있기 때문)
+            if (currentPreviewBar != null)
+            {
+                currentPreviewBar.ClearPendingCharacter(currentPreviewIndex);
+                currentPreviewBar = null;
+                currentPreviewIndex = -1;
+            }
+            return;
+        }
+
+        if (!TryGetNextSlotInfo(out var bar, out var index)) return;
+
+        if (currentPreviewBar != null && (currentPreviewBar != bar || currentPreviewIndex != index))
+            currentPreviewBar.ClearPendingCharacter(currentPreviewIndex);
+
+        currentPreviewBar = bar;
+        currentPreviewIndex = index;
+        bar.SetPendingCharacter(index, id);
+    }
+    
     private void ApplyAction(DraftSide side, string characterId, DraftResultType type, bool notify)
     {
         var bar = ResolveBar(side, type);
@@ -307,5 +345,34 @@ public class DraftBoardController : MonoBehaviour
             };
         }
         return total;
+    }
+    
+    // CharacterListPanelController가 호출할 공개 진입점
+    public void RequestPreview(string characterId)
+    {
+        if (session == null) return;
+        session.UpdatePendingPreviewServerRpc(characterId);
+    }
+
+    public void ClearPreview()
+    {
+        if (session == null) return;
+        session.UpdatePendingPreviewServerRpc(string.Empty);
+    }
+    
+    // UpdateNextSlotIndicator에서 쓰는 로직을 재사용할 수 있도록 뽑아낸 헬퍼
+    private bool TryGetNextSlotInfo(out PickSlotBar bar, out int index)
+    {
+        bar = null; index = -1;
+        if (session == null || session.State.Value != DraftSessionState.InProgress) return false;
+        if (!Enum.TryParse(session.CurrentPhaseName.Value.ToString(), out DraftResultType type)) return false;
+
+        var side = session.CurrentSide.Value;
+        bar = ResolveBar(side, type);
+        if (!bar) return false;
+
+        var key = (side, type);
+        index = barCursor.TryGetValue(key, out var cursor) ? cursor : 0;
+        return true;
     }
 }

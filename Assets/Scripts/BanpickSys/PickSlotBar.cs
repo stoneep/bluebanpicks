@@ -133,5 +133,19 @@ public sealed class PickSlotBar : MonoBehaviour
         foreach (var s in slots) s.SetNextTurnHighlight(false);
     }
 
+    public void SetPendingCharacter(int index, string characterId)
+    {
+        SafeInitialize();
+        if (!IsValidIndex(index)) return;
+        slots[index].ShowPending(characterId);
+    }
+
+    public void ClearPendingCharacter(int index)
+    {
+        SafeInitialize();
+        if (!IsValidIndex(index)) return;
+        slots[index].ClearPending();
+    }
+    
     private bool IsValidIndex(int index) => index >= 0 && index < slots.Count;
 }
