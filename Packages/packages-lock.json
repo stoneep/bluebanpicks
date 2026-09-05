@@ -424,6 +424,12 @@
         "com.unity.modules.physics": "1.0.0"
       }
     },
+    "com.unity.ui": {
+      "version": "2.0.0",
+      "depth": 0,
+      "source": "builtin",
+      "dependencies": {}
+    },
     "com.unity.visualeffectgraph": {
       "version": "17.5.0",
       "depth": 0,
